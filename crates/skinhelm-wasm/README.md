@@ -16,7 +16,7 @@ Main capabilities:
 - Minecraft cuboid rendering for head, body, arms, and legs.
 - Optional outer layers: hat, jacket, sleeves, and pants.
 - Local upload of `64x32` capes or compatible `64x64` cape PNGs.
-- Skin, model type, and official cape loading when served by the `skinhelm` backend.
+- Skin, model type, and official cape loading by username or UUID when served by the `skinhelm` backend.
 - `NEAREST` texture filtering and `CLAMP_TO_EDGE` wrapping for pixel-art skins.
 - Mouse orbit controls and wheel zoom.
 - Experimental walking animation, disabled by default, with speed control.
@@ -29,7 +29,7 @@ The workspace has three main crates:
 - `crates/skinhelm-core`: shared domain logic, Mojang client, cache, validation, types, and 2D helmeted head PNG rendering.
 - `crates/skinhelm-wasm`: 3D WebAssembly browser viewer.
 
-This crate does not resolve usernames, call Mojang APIs directly, or implement HTTP routes. That work belongs to the `skinhelm` backend and `skinhelm-core`. When the server is compiled with `wasm-viewer`, it embeds this crate's `index.html`, `bootstrap.js`, `pkg/skinhelm_wasm.js`, and `pkg/skinhelm_wasm_bg.wasm` outputs.
+This crate does not call Mojang APIs directly or implement HTTP routes. Username and UUID resolution belongs to the `skinhelm` backend and `skinhelm-core`. When the server is compiled with `wasm-viewer`, it embeds this crate's `index.html`, `bootstrap.js`, `pkg/skinhelm_wasm.js`, and `pkg/skinhelm_wasm_bg.wasm` outputs.
 
 To serve the viewer through the backend:
 
@@ -43,7 +43,11 @@ Then open:
 http://localhost:3000/viewer
 ```
 
-The viewer can also be opened with a UUID path. In that flow, the backend fetches the Mojang profile, downloads the skin, reports whether the model is `slim` or `classic` through the `x-skinhelm-model` header, and reports official cape availability through the `x-skinhelm-cape` header:
+The viewer can also be opened with a username or UUID path. In that flow, the backend resolves the player, fetches the Mojang profile, downloads the skin, reports whether the model is `slim` or `classic` through the `x-skinhelm-model` header, and reports official cape availability through the `x-skinhelm-cape` header:
+
+```text
+http://localhost:3000/viewer/Steve
+```
 
 ```text
 http://localhost:3000/viewer/bc881e0292164f6ea80f7b9df0ccf9e9
@@ -97,7 +101,7 @@ Important exported methods:
 - `pointer_down(x, y)`, `pointer_move(x, y)`, `pointer_up()`: orbit controls.
 - `wheel(delta_y)`: zoom control.
 
-`bootstrap.js` contains a complete integration with the UI in `index.html`, including local file reads through `arrayBuffer()`, animation controls, and UUID loading when the current path matches `/viewer/{uuid}`.
+`bootstrap.js` contains a complete integration with the UI in `index.html`, including local file reads through `arrayBuffer()`, animation controls, player loading from the username/UUID input, and automatic player loading when the current path matches `/viewer/{player}`.
 
 ## Build and Test Commands
 
@@ -154,7 +158,7 @@ npm run dev
 - `src/controls.rs`: camera, orbit controls, zoom, and projection helpers.
 - `src/math.rs`: small vector and matrix helpers used by the renderer.
 - `src/error.rs`: viewer errors converted into JavaScript-facing messages.
-- `bootstrap.js`: release JavaScript glue for UI events and UUID loading.
+- `bootstrap.js`: release JavaScript glue for UI events and username/UUID loading.
 - `index.html`: viewer interface used by Vite and the backend.
 - `pkg/`: `wasm-pack` output; embedded by the backend when `wasm-viewer` is enabled.
 - `dist/`: `npm run build` output.
@@ -165,6 +169,8 @@ The interface in `index.html` uses these IDs, consumed by `bootstrap.js`:
 
 - `skin-file`: selects a local skin PNG.
 - `cape-file`: selects a local cape PNG.
+- `player-input`: accepts a Minecraft username, hyphenated UUID, or compact UUID.
+- `load-player`: loads the player from `player-input` through the backend viewer routes.
 - `load-default`: loads the generated default skin.
 - `toggle-overlays`: shows or hides outer layers.
 - `toggle-cape`: shows or hides an already loaded cape.
@@ -211,6 +217,6 @@ Capes:
 
 - No elytra rendering.
 - No PNG snapshot export.
-- No direct username lookup in this crate; official UUID loading depends on the `skinhelm` backend.
+- No direct Mojang API calls in this crate; official username/UUID loading depends on the `skinhelm` backend.
 - The UI does not yet expose full idle, running, or sneaking poses.
 - Local capes outside the classic layout are not supported.

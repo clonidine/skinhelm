@@ -99,14 +99,18 @@ Additional routes:
 
 - `GET /viewer`: redirects to `/viewer/`;
 - `GET /viewer/`: serves the viewer HTML;
-- `GET /viewer/{uuid}`: opens the viewer for a UUID;
-- `GET /viewer/skin/{uuid}`: downloads the skin and reports the `classic` or `slim` model through headers;
-- `GET /viewer/cape/{uuid}`: downloads the official cape when available;
+- `GET /viewer/{player}`: opens the viewer for a username, hyphenated UUID, or compact UUID;
+- `GET /viewer/skin/{player}`: downloads the skin and reports the `classic` or `slim` model through headers;
+- `GET /viewer/cape/{player}`: downloads the official cape when available;
 - `GET /viewer/bootstrap.js`;
 - `GET /viewer/pkg/skinhelm_wasm.js`;
 - `GET /viewer/pkg/skinhelm_wasm_bg.wasm`.
 
-Example:
+Examples:
+
+```text
+http://localhost:3000/viewer/Steve
+```
 
 ```text
 http://localhost:3000/viewer/bc881e0292164f6ea80f7b9df0ccf9e9

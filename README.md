@@ -35,7 +35,11 @@ cargo run -p skinhelm --features wasm-viewer
 
 Then open `http://localhost:3000/viewer`.
 
-To open the viewer with a Minecraft skin resolved by UUID, including slim/classic metadata and official cape when Mojang provides one:
+To open the viewer with a Minecraft skin resolved by username or UUID, including slim/classic metadata and official cape when Mojang provides one:
+
+```text
+http://localhost:3000/viewer/Steve
+```
 
 ```text
 http://localhost:3000/viewer/bc881e0292164f6ea80f7b9df0ccf9e9

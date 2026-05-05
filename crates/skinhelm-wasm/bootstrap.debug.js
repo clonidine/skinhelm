@@ -2,6 +2,8 @@ import init, { SkinhelmViewer } from "./pkg/skinhelm_wasm.js";
 
 const status = document.getElementById("status");
 const canvas = document.getElementById("viewer-canvas");
+const playerInput = document.getElementById("player-input");
+const loadPlayer = document.getElementById("load-player");
 const skinFile = document.getElementById("skin-file");
 const capeFile = document.getElementById("cape-file");
 const loadDefault = document.getElementById("load-default");
@@ -41,16 +43,17 @@ function requestedPreset() {
   return "default";
 }
 
-function skinUuidFromPath() {
+function skinPlayerFromPath() {
   const match = window.location.pathname.match(
-    /^\/viewer\/([0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\/?$/,
+    /^\/viewer\/([0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[A-Za-z0-9_]{3,16})\/?$/,
   );
   return match ? match[1] : null;
 }
 
-async function loadUuidSkin(viewer, uuid) {
-  setStatus(`Loading skin for ${uuid}...`);
-  const response = await fetch(`/viewer/skin/${uuid}`, {
+async function loadPlayerSkin(viewer, player) {
+  setStatus(`Loading skin for ${player}...`);
+  const encodedPlayer = encodeURIComponent(player);
+  const response = await fetch(`/viewer/skin/${encodedPlayer}`, {
     headers: { Accept: "image/png" },
     cache: "no-store",
   });
@@ -73,16 +76,16 @@ async function loadUuidSkin(viewer, uuid) {
   viewer.clear_cape();
   toggleCape.checked = false;
   if (hasCape) {
-    await loadUuidCape(viewer, uuid);
+    await loadPlayerCape(viewer, player);
     toggleCape.checked = true;
-    setStatus(`Loaded ${slim ? "slim" : "classic"} skin and cape for ${uuid}`);
+    setStatus(`Loaded ${slim ? "slim" : "classic"} skin and cape for ${player}`);
   } else {
-    setStatus(`Loaded ${slim ? "slim" : "classic"} skin for ${uuid}`);
+    setStatus(`Loaded ${slim ? "slim" : "classic"} skin for ${player}`);
   }
 }
 
-async function loadUuidCape(viewer, uuid) {
-  const response = await fetch(`/viewer/cape/${uuid}`, {
+async function loadPlayerCape(viewer, player) {
+  const response = await fetch(`/viewer/cape/${encodeURIComponent(player)}`, {
     headers: { Accept: "image/png" },
     cache: "no-store",
   });
@@ -115,6 +118,19 @@ function setDockOpen(open) {
   dockToggle.title = open ? "Hide controls" : "Show controls";
 }
 
+async function loadRequestedPlayer(viewer) {
+  const player = playerInput.value.trim();
+  if (!player) {
+    return;
+  }
+
+  try {
+    await loadPlayerSkin(viewer, player);
+  } catch (error) {
+    setStatus(String(error));
+  }
+}
+
 async function main() {
   await init();
   const viewer = SkinhelmViewer.init();
@@ -143,14 +159,26 @@ async function main() {
   }
   let pointerActive = false;
   let pendingPointerMove = null;
-  const initialUuid = skinUuidFromPath();
-  if (initialUuid) {
+  const initialPlayer = skinPlayerFromPath();
+  if (initialPlayer) {
+    playerInput.value = initialPlayer;
     try {
-      await loadUuidSkin(viewer, initialUuid);
+      await loadPlayerSkin(viewer, initialPlayer);
     } catch (error) {
       setStatus(String(error));
     }
   }
+
+  loadPlayer.addEventListener("click", () => {
+    loadRequestedPlayer(viewer);
+  });
+
+  playerInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loadRequestedPlayer(viewer);
+    }
+  });
 
   loadDefault.addEventListener("click", () => {
     try {

@@ -280,7 +280,8 @@
       }
 
       .button,
-      .file-button {
+      .file-button,
+      .player-input {
         position: relative;
         display: inline-flex;
         align-items: center;
@@ -299,6 +300,17 @@
           border-color var(--transition-fast),
           background-color var(--transition-fast),
           box-shadow var(--transition-fast);
+      }
+
+      .player-input {
+        width: clamp(180px, 20vw, 280px);
+        cursor: text;
+        justify-content: flex-start;
+        outline: none;
+      }
+
+      .player-input::placeholder {
+        color: rgba(255, 255, 255, 0.42);
       }
 
       .button-primary {
@@ -451,6 +463,7 @@
 
         .button,
         .file-button,
+        .player-input,
         .toggle-field,
         .speed-field {
           width: 100%;
@@ -487,11 +500,21 @@
 
         <section class="control-dock" aria-label="Viewer controls">
           <div class="control-pill">
+            <input
+              id="player-input"
+              class="player-input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Username or UUID"
+              aria-label="Minecraft username or UUID"
+            />
+            <button id="load-player" class="button button-primary" type="button">Load</button>
             <input id="skin-file" class="file-input" type="file" accept="image/png" />
             <label class="file-button" for="skin-file">Choose PNG</label>
             <input id="cape-file" class="file-input" type="file" accept="image/png" />
             <label class="file-button" for="cape-file">Choose Cape</label>
-            <button id="load-default" class="button button-primary" type="button">Default</button>
+            <button id="load-default" class="button" type="button">Default</button>
 
             <label class="toggle-field">
               <span class="toggle-copy">Outer layers</span>

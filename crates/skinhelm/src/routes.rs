@@ -10,8 +10,6 @@ use axum::{Json, Router};
 use serde::Serialize;
 use skinhelm_core::error::AppError;
 use skinhelm_core::render::render_helm_png;
-#[cfg(feature = "wasm-viewer")]
-use skinhelm_core::types::normalize_uuid;
 use skinhelm_core::types::{parse_player, parse_size, PlayerInput};
 
 #[cfg(feature = "wasm-viewer")]
@@ -72,9 +70,9 @@ pub fn create_router(state: AppState) -> Router {
     let router = router
         .route("/viewer", get(viewer_redirect))
         .route("/viewer/", get(viewer_index))
-        .route("/viewer/{uuid}", get(viewer_player))
-        .route("/viewer/skin/{uuid}", get(viewer_skin))
-        .route("/viewer/cape/{uuid}", get(viewer_cape))
+        .route("/viewer/{player}", get(viewer_player))
+        .route("/viewer/skin/{player}", get(viewer_skin))
+        .route("/viewer/cape/{player}", get(viewer_cape))
         .route("/viewer/bootstrap.js", get(viewer_bootstrap))
         .route("/viewer/pkg/skinhelm_wasm.js", get(viewer_wasm_js))
         .route("/viewer/pkg/skinhelm_wasm_bg.wasm", get(viewer_wasm));
@@ -92,12 +90,7 @@ async fn helm(
     Query(query): Query<HashMap<String, String>>,
 ) -> Result<Response<Body>, HttpError> {
     let size = parse_size(query.get("size").map(String::as_str))?;
-    let player = parse_player(&player)?;
-
-    let uuid = match player {
-        PlayerInput::Uuid(uuid) => uuid,
-        PlayerInput::Username(username) => resolve_username_cached(&state, &username).await?,
-    };
+    let uuid = resolve_player_cached(&state, &player).await?;
 
     let skin_url = resolve_skin_url_cached(&state, &uuid).await?;
 
@@ -118,17 +111,17 @@ async fn helm(
 }
 
 #[cfg(feature = "wasm-viewer")]
-async fn viewer_player(Path(uuid): Path<String>) -> Result<Response<Body>, HttpError> {
-    normalize_uuid(&uuid).ok_or(AppError::InvalidPlayer)?;
+async fn viewer_player(Path(player): Path<String>) -> Result<Response<Body>, HttpError> {
+    parse_player(&player)?;
     Ok(viewer_index().await)
 }
 
 #[cfg(feature = "wasm-viewer")]
 async fn viewer_skin(
     State(state): State<AppState>,
-    Path(uuid): Path<String>,
+    Path(player): Path<String>,
 ) -> Result<Response<Body>, HttpError> {
-    let uuid = normalize_uuid(&uuid).ok_or(AppError::InvalidPlayer)?;
+    let uuid = resolve_player_cached(&state, &player).await?;
     let skin_profile = state.mojang.fetch_skin_profile(&uuid).await?;
     state
         .cache
@@ -141,13 +134,20 @@ async fn viewer_skin(
 #[cfg(feature = "wasm-viewer")]
 async fn viewer_cape(
     State(state): State<AppState>,
-    Path(uuid): Path<String>,
+    Path(player): Path<String>,
 ) -> Result<Response<Body>, HttpError> {
-    let uuid = normalize_uuid(&uuid).ok_or(AppError::InvalidPlayer)?;
+    let uuid = resolve_player_cached(&state, &player).await?;
     let skin_profile = state.mojang.fetch_skin_profile(&uuid).await?;
     let cape_url = skin_profile.cape_url.ok_or(AppError::ProfileHasNoCape)?;
     let cape_png = state.mojang.download_cape(&cape_url).await?;
     cape_response(cape_png)
+}
+
+async fn resolve_player_cached(state: &AppState, player: &str) -> Result<String, AppError> {
+    match parse_player(player)? {
+        PlayerInput::Uuid(uuid) => Ok(uuid),
+        PlayerInput::Username(username) => resolve_username_cached(state, &username).await,
+    }
 }
 
 async fn resolve_username_cached(state: &AppState, username: &str) -> Result<String, AppError> {
