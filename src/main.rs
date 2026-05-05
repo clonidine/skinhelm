@@ -3,6 +3,7 @@ mod error;
 mod mojang;
 mod render;
 mod routes;
+mod shutdown;
 mod types;
 
 use std::net::SocketAddr;
@@ -11,6 +12,7 @@ use std::sync::Arc;
 use cache::AppCache;
 use mojang::MojangClient;
 use routes::create_router;
+use shutdown::shutdown_signal;
 use tracing::info;
 
 #[derive(Clone)]
@@ -49,7 +51,10 @@ async fn main() {
         }
     };
 
-    if let Err(err) = axum::serve(listener, app).await {
+    if let Err(err) = axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+    {
         tracing::error!(error = %err, "server stopped with error");
     }
 }
