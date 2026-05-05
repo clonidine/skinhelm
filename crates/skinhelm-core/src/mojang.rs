@@ -6,7 +6,7 @@ use reqwest::StatusCode;
 
 use crate::error::AppError;
 use crate::types::{
-    normalize_uuid, MojangProfileResponse, TexturesPayload, UsernameProfileResponse,
+    normalize_uuid, MojangProfileResponse, SkinProfile, TexturesPayload, UsernameProfileResponse,
 };
 
 const MOJANG_USERNAME_URL: &str = "https://api.mojang.com/users/profiles/minecraft/";
@@ -60,6 +60,12 @@ impl MojangClient {
     }
 
     pub async fn fetch_skin_url(&self, uuid: &str) -> Result<String, AppError> {
+        self.fetch_skin_profile(uuid)
+            .await
+            .map(|profile| profile.url)
+    }
+
+    pub async fn fetch_skin_profile(&self, uuid: &str) -> Result<SkinProfile, AppError> {
         let url = format!("{MOJANG_PROFILE_URL}{uuid}?unsigned=false");
         let response = self.client.get(url).send().await.map_err(|err| {
             tracing::warn!(error = %err, uuid, "profile request failed");
@@ -96,29 +102,52 @@ impl MojangClient {
             AppError::TextureJson
         })?;
 
-        let skin_url = textures
+        let cape_url = textures
             .textures
-            .skin
-            .map(|skin| skin.url)
-            .ok_or(AppError::ProfileHasNoSkin)?;
+            .cape
+            .and_then(|cape| valid_texture_url(cape.url));
+        let skin = textures.textures.skin.ok_or(AppError::ProfileHasNoSkin)?;
+        let skin_url = skin.url;
 
-        if skin_url.starts_with("http://") || skin_url.starts_with("https://") {
-            Ok(skin_url)
+        if let Some(skin_url) = valid_texture_url(skin_url) {
+            let slim = skin
+                .metadata
+                .and_then(|metadata| metadata.model)
+                .is_some_and(|model| model == "slim");
+            Ok(SkinProfile {
+                url: skin_url,
+                slim,
+                cape_url,
+            })
         } else {
             Err(AppError::MalformedUpstream)
         }
     }
 
     pub async fn download_skin(&self, skin_url: &str) -> Result<Vec<u8>, AppError> {
-        let response = self.client.get(skin_url).send().await.map_err(|err| {
-            tracing::warn!(error = %err, "skin download request failed");
-            AppError::SkinDownload
+        self.download_texture(skin_url, AppError::SkinDownload)
+            .await
+    }
+
+    pub async fn download_cape(&self, cape_url: &str) -> Result<Vec<u8>, AppError> {
+        self.download_texture(cape_url, AppError::CapeDownload)
+            .await
+    }
+
+    async fn download_texture(
+        &self,
+        texture_url: &str,
+        error: AppError,
+    ) -> Result<Vec<u8>, AppError> {
+        let response = self.client.get(texture_url).send().await.map_err(|err| {
+            tracing::warn!(error = %err, "texture download request failed");
+            error
         })?;
 
         if !response.status().is_success() {
             let status = response.status();
-            tracing::warn!(%status, "skin download returned error status");
-            return Err(AppError::SkinDownload);
+            tracing::warn!(%status, "texture download returned error status");
+            return Err(error);
         }
 
         response
@@ -126,8 +155,16 @@ impl MojangClient {
             .await
             .map(|bytes| bytes.to_vec())
             .map_err(|err| {
-                tracing::warn!(error = %err, "skin download body read failed");
-                AppError::SkinDownload
+                tracing::warn!(error = %err, "texture download body read failed");
+                error
             })
+    }
+}
+
+fn valid_texture_url(url: String) -> Option<String> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        Some(url)
+    } else {
+        None
     }
 }

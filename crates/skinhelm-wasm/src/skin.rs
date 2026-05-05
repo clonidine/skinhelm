@@ -8,11 +8,25 @@ pub enum SkinFormat {
     Legacy64x32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelVariant {
+    Classic,
+    Slim,
+}
+
 #[derive(Debug, Clone)]
 pub struct SkinImage {
     pub width: u32,
     pub height: u32,
     pub format: SkinFormat,
+    pub model: ModelVariant,
+    pub rgba: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CapeImage {
+    pub width: u32,
+    pub height: u32,
     pub rgba: Vec<u8>,
 }
 
@@ -32,6 +46,25 @@ pub fn decode_png(bytes: &[u8]) -> Result<SkinImage, ViewerError> {
         width,
         height,
         format,
+        model: ModelVariant::Classic,
+        rgba: image.to_rgba8().into_raw(),
+    })
+}
+
+pub fn validate_cape_dimensions(width: u32, height: u32) -> Result<(), ViewerError> {
+    match (width, height) {
+        (64, 32) | (64, 64) => Ok(()),
+        _ => Err(ViewerError::UnsupportedCapeDimensions(width, height)),
+    }
+}
+
+pub fn decode_cape_png(bytes: &[u8]) -> Result<CapeImage, ViewerError> {
+    let image = image::load_from_memory(bytes).map_err(|_| ViewerError::InvalidCapePng)?;
+    let (width, height) = image.dimensions();
+    validate_cape_dimensions(width, height)?;
+    Ok(CapeImage {
+        width,
+        height,
         rgba: image.to_rgba8().into_raw(),
     })
 }
@@ -66,6 +99,7 @@ pub fn default_skin() -> SkinImage {
         width: width as u32,
         height: height as u32,
         format: SkinFormat::Modern64x64,
+        model: ModelVariant::Classic,
         rgba,
     }
 }
@@ -122,5 +156,15 @@ mod tests {
     #[test]
     fn rejects_unsupported_size() {
         assert!(validate_dimensions(32, 32).is_err());
+    }
+
+    #[test]
+    fn accepts_official_cape_size() {
+        assert!(validate_cape_dimensions(64, 32).is_ok());
+    }
+
+    #[test]
+    fn rejects_unsupported_cape_size() {
+        assert!(validate_cape_dimensions(32, 32).is_err());
     }
 }

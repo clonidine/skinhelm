@@ -5,3 +5,7 @@
 **/pkg
 **/node_modules
 **/dist
+!/crates/skinhelm-wasm/pkg/
+crates/skinhelm-wasm/pkg/*
+!/crates/skinhelm-wasm/pkg/skinhelm_wasm.js
+!/crates/skinhelm-wasm/pkg/skinhelm_wasm_bg.wasm

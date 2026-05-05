@@ -1,5 +1,7 @@
 mod routes;
 mod shutdown;
+#[cfg(feature = "wasm-viewer")]
+mod viewer;
 
 use std::net::SocketAddr;
 use std::sync::Arc;

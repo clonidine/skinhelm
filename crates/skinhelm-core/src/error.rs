@@ -1,11 +1,13 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum AppError {
     InvalidPlayer,
     InvalidSize,
     UsernameNotFound,
     ProfileHasNoSkin,
+    ProfileHasNoCape,
     MojangRequest,
     SkinDownload,
+    CapeDownload,
     MalformedUpstream,
     TextureDecode,
     TextureJson,
@@ -20,8 +22,10 @@ impl AppError {
             Self::InvalidSize => "invalid size",
             Self::UsernameNotFound => "username not found",
             Self::ProfileHasNoSkin => "skin not found",
+            Self::ProfileHasNoCape => "cape not found",
             Self::MojangRequest => "mojang request failed",
             Self::SkinDownload => "skin download failed",
+            Self::CapeDownload => "cape download failed",
             Self::MalformedUpstream => "malformed upstream response",
             Self::TextureDecode => "invalid texture data",
             Self::TextureJson => "invalid texture json",
@@ -35,7 +39,10 @@ impl AppError {
     }
 
     pub fn is_not_found(&self) -> bool {
-        matches!(self, Self::UsernameNotFound | Self::ProfileHasNoSkin)
+        matches!(
+            self,
+            Self::UsernameNotFound | Self::ProfileHasNoSkin | Self::ProfileHasNoCape
+        )
     }
 
     pub fn is_internal(&self) -> bool {

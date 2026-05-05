@@ -1,4 +1,6 @@
 pub mod animation;
+pub mod cape;
+pub mod controls;
 pub mod error;
 pub mod math;
 pub mod model;
@@ -6,8 +8,6 @@ pub mod skin;
 
 #[cfg(target_arch = "wasm32")]
 mod app;
-#[cfg(target_arch = "wasm32")]
-mod controls;
 #[cfg(target_arch = "wasm32")]
 mod webgl;
 
@@ -37,8 +37,24 @@ impl SkinhelmViewer {
         self.app.load_skin_bytes(bytes)
     }
 
+    pub fn load_skin_bytes_with_model(&mut self, bytes: &[u8], slim: bool) -> Result<(), JsValue> {
+        self.app.load_skin_bytes_with_model(bytes, slim)
+    }
+
     pub fn load_default_skin(&mut self) -> Result<(), JsValue> {
         self.app.load_default_skin()
+    }
+
+    pub fn load_cape_bytes(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        self.app.load_cape_bytes(bytes)
+    }
+
+    pub fn clear_cape(&mut self) {
+        self.app.clear_cape();
+    }
+
+    pub fn set_cape_visible(&mut self, visible: bool) -> String {
+        self.app.set_cape_visible(visible)
     }
 
     pub fn set_animation_enabled(&mut self, enabled: bool) {
@@ -51,6 +67,14 @@ impl SkinhelmViewer {
 
     pub fn set_animation_speed(&mut self, speed: f32) {
         self.app.set_animation_speed(speed);
+    }
+
+    pub fn set_debug_mode(&mut self, mode: &str) -> String {
+        self.app.set_debug_mode(mode)
+    }
+
+    pub fn set_preset(&mut self, preset: &str) -> String {
+        self.app.set_preset(preset)
     }
 
     pub fn resize(&mut self) -> Result<(), JsValue> {

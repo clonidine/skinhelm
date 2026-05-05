@@ -10,8 +10,12 @@ use axum::{Json, Router};
 use serde::Serialize;
 use skinhelm_core::error::AppError;
 use skinhelm_core::render::render_helm_png;
+#[cfg(feature = "wasm-viewer")]
+use skinhelm_core::types::normalize_uuid;
 use skinhelm_core::types::{parse_player, parse_size, PlayerInput};
 
+#[cfg(feature = "wasm-viewer")]
+use crate::viewer::{viewer_bootstrap, viewer_index, viewer_redirect, viewer_wasm, viewer_wasm_js};
 use crate::AppState;
 
 #[derive(Debug, Serialize)]
@@ -60,10 +64,22 @@ impl IntoResponse for HttpError {
 }
 
 pub fn create_router(state: AppState) -> Router {
-    Router::new()
+    let router = Router::new()
         .route("/health", get(health))
-        .route("/helm/{player}", get(helm))
-        .with_state(state)
+        .route("/helm/{player}", get(helm));
+
+    #[cfg(feature = "wasm-viewer")]
+    let router = router
+        .route("/viewer", get(viewer_redirect))
+        .route("/viewer/", get(viewer_index))
+        .route("/viewer/{uuid}", get(viewer_player))
+        .route("/viewer/skin/{uuid}", get(viewer_skin))
+        .route("/viewer/cape/{uuid}", get(viewer_cape))
+        .route("/viewer/bootstrap.js", get(viewer_bootstrap))
+        .route("/viewer/pkg/skinhelm_wasm.js", get(viewer_wasm_js))
+        .route("/viewer/pkg/skinhelm_wasm_bg.wasm", get(viewer_wasm));
+
+    router.with_state(state)
 }
 
 async fn health() -> Json<HealthResponse> {
@@ -99,6 +115,39 @@ async fn helm(
         .await;
 
     png_response(rendered)
+}
+
+#[cfg(feature = "wasm-viewer")]
+async fn viewer_player(Path(uuid): Path<String>) -> Result<Response<Body>, HttpError> {
+    normalize_uuid(&uuid).ok_or(AppError::InvalidPlayer)?;
+    Ok(viewer_index().await)
+}
+
+#[cfg(feature = "wasm-viewer")]
+async fn viewer_skin(
+    State(state): State<AppState>,
+    Path(uuid): Path<String>,
+) -> Result<Response<Body>, HttpError> {
+    let uuid = normalize_uuid(&uuid).ok_or(AppError::InvalidPlayer)?;
+    let skin_profile = state.mojang.fetch_skin_profile(&uuid).await?;
+    state
+        .cache
+        .set_skin_url(&uuid, skin_profile.url.clone())
+        .await;
+    let skin_png = state.mojang.download_skin(&skin_profile.url).await?;
+    skin_response(skin_png, skin_profile.slim, skin_profile.cape_url.is_some())
+}
+
+#[cfg(feature = "wasm-viewer")]
+async fn viewer_cape(
+    State(state): State<AppState>,
+    Path(uuid): Path<String>,
+) -> Result<Response<Body>, HttpError> {
+    let uuid = normalize_uuid(&uuid).ok_or(AppError::InvalidPlayer)?;
+    let skin_profile = state.mojang.fetch_skin_profile(&uuid).await?;
+    let cape_url = skin_profile.cape_url.ok_or(AppError::ProfileHasNoCape)?;
+    let cape_png = state.mojang.download_cape(&cape_url).await?;
+    cape_response(cape_png)
 }
 
 async fn resolve_username_cached(state: &AppState, username: &str) -> Result<String, AppError> {
@@ -137,5 +186,39 @@ fn png_response(png: Vec<u8>) -> Result<Response<Body>, HttpError> {
         CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=3600"),
     );
+    Ok(response)
+}
+
+#[cfg(feature = "wasm-viewer")]
+fn skin_response(png: Vec<u8>, slim: bool, has_cape: bool) -> Result<Response<Body>, HttpError> {
+    let mut response = Response::new(Body::from(png));
+    *response.status_mut() = StatusCode::OK;
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    response.headers_mut().insert(
+        "x-skinhelm-model",
+        HeaderValue::from_static(if slim { "slim" } else { "classic" }),
+    );
+    response.headers_mut().insert(
+        "x-skinhelm-cape",
+        HeaderValue::from_static(if has_cape { "true" } else { "false" }),
+    );
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok(response)
+}
+
+#[cfg(feature = "wasm-viewer")]
+fn cape_response(png: Vec<u8>) -> Result<Response<Body>, HttpError> {
+    let mut response = Response::new(Body::from(png));
+    *response.status_mut() = StatusCode::OK;
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
     Ok(response)
 }

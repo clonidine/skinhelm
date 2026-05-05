@@ -25,7 +25,21 @@
 
 - `crates/skinhelm`: HTTP server, Axum routes, application state, logging setup, and graceful shutdown.
 - `crates/skinhelm-core`: Mojang client, validation, cache, PNG rendering, shared types, and domain errors.
-- `crates/skinhelm-wasm`: WebAssembly/WebGL browser viewer for complete 3D Minecraft skins.
+- `crates/skinhelm-wasm`: WebAssembly/WebGL browser viewer for complete 3D Minecraft skins, slim/classic models, optional experimental animation, and local or official capes.
+
+The HTTP server can optionally expose the WASM viewer when built with:
+
+```sh
+cargo run -p skinhelm --features wasm-viewer
+```
+
+Then open `http://localhost:3000/viewer`.
+
+To open the viewer with a Minecraft skin resolved by UUID, including slim/classic metadata and official cape when Mojang provides one:
+
+```text
+http://localhost:3000/viewer/bc881e0292164f6ea80f7b9df0ccf9e9
+```
 
 ## Run Locally
 

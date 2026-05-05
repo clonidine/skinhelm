@@ -37,11 +37,26 @@ pub struct TexturesPayload {
 pub struct Textures {
     #[serde(rename = "SKIN")]
     pub skin: Option<SkinTexture>,
+    #[serde(rename = "CAPE")]
+    pub cape: Option<SkinTexture>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct SkinTexture {
     pub url: String,
+    pub metadata: Option<SkinMetadata>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SkinMetadata {
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkinProfile {
+    pub url: String,
+    pub slim: bool,
+    pub cape_url: Option<String>,
 }
 
 pub fn parse_player(value: &str) -> Result<PlayerInput, AppError> {

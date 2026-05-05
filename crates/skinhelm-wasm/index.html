@@ -7,96 +7,523 @@
     <style>
       :root {
         color-scheme: dark;
+        --bg: #000;
+        --panel: rgba(255, 255, 255, 0.055);
+        --panel-strong: rgba(14, 14, 14, 0.9);
+        --border: rgba(255, 255, 255, 0.12);
+        --border-strong: rgba(255, 255, 255, 0.24);
+        --text-primary: #f7f7f7;
+        --text-muted: rgba(255, 255, 255, 0.56);
+        --success: #75f0a0;
+        --shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.48);
+        --font-heading: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+        --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        --transition-fast: 180ms ease-out;
         font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
           sans-serif;
-        background: #111316;
-        color: #eef2f5;
+        background: #000;
+        color: var(--text-primary);
       }
 
       * {
         box-sizing: border-box;
       }
 
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
         min-height: 100vh;
-        display: grid;
-        grid-template-rows: auto 1fr;
-      }
-
-      header {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        align-items: center;
-        padding: 12px 16px;
-        background: #1a1f25;
-        border-bottom: 1px solid #303842;
-      }
-
-      label {
-        display: inline-flex;
-        gap: 8px;
-        align-items: center;
-        white-space: nowrap;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text-primary);
+        line-height: 1.5;
       }
 
       button,
-      input[type="file"]::file-selector-button {
-        border: 1px solid #3c4652;
-        background: #242b34;
-        color: #f5f7fa;
-        border-radius: 6px;
-        padding: 7px 10px;
-        cursor: pointer;
+      input {
+        font: inherit;
       }
 
-      input[type="range"] {
-        width: 120px;
+      :focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.86);
+        outline-offset: 2px;
       }
 
-      main {
+      .app-shell {
         position: relative;
-        min-height: 0;
+        min-height: 100dvh;
+        height: 100dvh;
+        overflow: hidden;
+        background: var(--bg);
+      }
+
+      .viewer-topbar {
+        position: absolute;
+        inset: 0 0 auto;
+        z-index: 4;
+        display: grid;
+        grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+        align-items: center;
+        gap: 16px;
+        height: clamp(58px, 7vh, 76px);
+        padding: 0 clamp(16px, 3vw, 30px);
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.82), transparent);
+        pointer-events: none;
+      }
+
+      .brand-block {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: max-content;
+      }
+
+      .brand-mark {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 38px;
+        height: 38px;
+        border: 2px solid rgba(255, 255, 255, 0.92);
+        border-radius: 50%;
+      }
+
+      .brand-mark::before,
+      .brand-mark::after,
+      .brand-mark span {
+        content: "";
+        position: absolute;
+        background: #fff;
+      }
+
+      .brand-mark::before {
+        left: 50%;
+        top: -10%;
+        width: 4px;
+        height: 120%;
+        border-radius: 999px;
+        transform: translateX(-50%) rotate(42deg);
+      }
+
+      .brand-mark::after {
+        right: 12%;
+        bottom: 18%;
+        width: 32%;
+        height: 10%;
+        border-radius: 999px;
+        transform: rotate(-22deg);
+      }
+
+      .brand-mark span {
+        left: 13%;
+        top: 34%;
+        width: 38%;
+        height: 12%;
+        border-radius: 999px;
+        transform: rotate(20deg);
+      }
+
+      .brand-copy {
+        display: grid;
+        gap: 1px;
+      }
+
+      .brand-copy strong {
+        color: #fff;
+        font-family: var(--font-heading);
+        font-size: 1.08rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .brand-copy span {
+        color: var(--text-muted);
+        font-size: 0.76rem;
+        font-weight: 600;
+      }
+
+      .status-badge {
+        display: block;
+        justify-self: end;
+        min-width: 0;
+        min-height: 32px;
+        max-width: min(calc(100vw - 230px), 760px);
+        padding: 8px 12px 7px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.045);
+        color: var(--text-muted);
+        box-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+        font-size: 0.73rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        line-height: 1.1;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+        backdrop-filter: blur(18px);
+      }
+
+      .viewer-stage {
+        position: relative;
+        min-height: 100dvh;
+        height: 100dvh;
+        overflow: hidden;
       }
 
       #viewer-canvas {
         display: block;
         width: 100%;
         height: 100%;
-        min-height: 520px;
-        background: #15191e;
+        min-height: 100dvh;
+        background: #090a0d;
         touch-action: none;
       }
 
-      #status {
-        min-width: 220px;
-        color: #aeb9c5;
+      .control-dock {
+        position: absolute;
+        left: 50%;
+        bottom: clamp(18px, 4vh, 38px);
+        z-index: 3;
+        display: grid;
+        gap: 12px;
+        width: min(980px, calc(100vw - 32px));
+        transform: translateX(-50%);
+      }
+
+      html[data-dock="closed"] .control-dock {
+        display: none;
+      }
+
+      .dock-toggle {
+        position: absolute;
+        right: clamp(16px, 3vw, 30px);
+        bottom: clamp(18px, 4vh, 38px);
+        z-index: 4;
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.055);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          0 16px 44px rgba(0, 0, 0, 0.36);
+        cursor: pointer;
+        backdrop-filter: blur(20px);
+        transition:
+          transform var(--transition-fast),
+          border-color var(--transition-fast),
+          background-color var(--transition-fast);
+      }
+
+      .dock-toggle:hover {
+        border-color: rgba(255, 255, 255, 0.34);
+        background: rgba(255, 255, 255, 0.09);
+        transform: translateY(-1px);
+      }
+
+      .dock-toggle::before,
+      .dock-toggle::after {
+        content: "";
+        position: absolute;
+        width: 14px;
+        height: 2px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        transition: transform var(--transition-fast);
+      }
+
+      .dock-toggle::before {
+        transform: translateY(-3px);
+      }
+
+      .dock-toggle::after {
+        transform: translateY(3px);
+      }
+
+      html[data-dock="closed"] .dock-toggle::before {
+        transform: rotate(90deg);
+      }
+
+      html[data-dock="closed"] .dock-toggle::after {
+        transform: rotate(0deg);
+      }
+
+      html[data-dock="open"] .dock-toggle {
+        bottom: calc(clamp(18px, 4vh, 38px) + 76px);
+      }
+
+      .control-pill {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 68px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--panel);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          var(--shadow-panel);
+        backdrop-filter: blur(22px);
+      }
+
+      .button,
+      .file-button {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 46px;
+        padding: 0 18px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.045);
+        color: var(--text-primary);
+        font-weight: 800;
+        cursor: pointer;
+        transition:
+          transform var(--transition-fast),
+          border-color var(--transition-fast),
+          background-color var(--transition-fast),
+          box-shadow var(--transition-fast);
+      }
+
+      .button-primary {
+        border-color: rgba(255, 255, 255, 0.18);
+        background: linear-gradient(180deg, #fff, #e9e9e9);
+        color: #070707;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.9),
+          0 16px 42px rgba(255, 255, 255, 0.08);
+      }
+
+      .button:hover,
+      .file-button:hover {
+        border-color: rgba(255, 255, 255, 0.34);
+        transform: translateY(-1px);
+      }
+
+      .button-primary:hover {
+        background: #fff;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 1),
+          0 20px 52px rgba(255, 255, 255, 0.1);
+      }
+
+      .file-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        clip-path: inset(50%);
+      }
+
+      .toggle-field {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 46px;
+        padding: 0 12px 0 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.045);
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      .toggle-copy {
+        color: rgba(255, 255, 255, 0.72);
+        white-space: nowrap;
+      }
+
+      .toggle-control {
+        position: relative;
+        flex: 0 0 auto;
+        width: 46px;
+        height: 28px;
+        margin: 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        appearance: none;
+        cursor: pointer;
+        transition:
+          background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+          border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+          box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .toggle-control::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: rgba(232, 238, 245, 0.9);
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.24),
+          0 0 0 1px rgba(255, 255, 255, 0.04);
+        transition:
+          transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+          background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+          box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .toggle-control:checked {
+        border-color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.05);
+      }
+
+      .toggle-control:checked::after {
+        transform: translateX(18px);
+        background: #050505;
+      }
+
+      .speed-field {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 46px;
+        padding: 0 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.045);
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      .speed-field input[type="range"] {
+        width: clamp(110px, 14vw, 160px);
+        accent-color: #fff;
+      }
+
+      .speed-field input[type="range"]:disabled {
+        opacity: 0.42;
+      }
+
+      @media (max-width: 760px) {
+        .viewer-topbar {
+          grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+          align-items: start;
+          height: auto;
+          padding-top: 14px;
+        }
+
+        .brand-copy span {
+          display: none;
+        }
+
+        .status-badge {
+          max-width: calc(100vw - 190px);
+          padding-top: 7px;
+          font-size: 0.66rem;
+        }
+
+        .control-pill {
+          justify-content: stretch;
+          border-radius: 28px;
+          padding: 14px;
+        }
+
+        html[data-dock="open"] .dock-toggle {
+          bottom: calc(clamp(18px, 4vh, 38px) + 430px);
+        }
+
+        .button,
+        .file-button,
+        .toggle-field,
+        .speed-field {
+          width: 100%;
+          justify-content: space-between;
+          border-radius: 18px;
+        }
       }
     </style>
   </head>
   <body>
-    <header>
-      <input id="skin-file" type="file" accept="image/png" />
-      <button id="load-default" type="button">Load default</button>
-      <label>
-        <input id="toggle-animation" type="checkbox" checked />
-        Animation
-      </label>
-      <label>
-        <input id="toggle-overlays" type="checkbox" checked />
-        Outer layers
-      </label>
-      <label>
-        Speed
-        <input id="animation-speed" type="range" min="0.1" max="3.0" step="0.1" value="1.0" />
-      </label>
-      <span id="status">Starting viewer...</span>
-    </header>
-    <main>
-      <canvas id="viewer-canvas"></canvas>
-    </main>
-    <script type="module" src="/bootstrap.js"></script>
+    <div class="app-shell">
+      <header class="viewer-topbar">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+          </div>
+          <div class="brand-copy">
+            <strong>Skinhelm</strong>
+            <span>WebGL viewer</span>
+          </div>
+        </div>
+        <span id="status" class="status-badge">Starting viewer...</span>
+      </header>
+
+      <main class="viewer-stage">
+        <canvas id="viewer-canvas"></canvas>
+        <button
+          id="dock-toggle"
+          class="dock-toggle"
+          type="button"
+          aria-label="Toggle controls"
+          title="Toggle controls"
+        ></button>
+
+        <section class="control-dock" aria-label="Viewer controls">
+          <div class="control-pill">
+            <input id="skin-file" class="file-input" type="file" accept="image/png" />
+            <label class="file-button" for="skin-file">Choose PNG</label>
+            <input id="cape-file" class="file-input" type="file" accept="image/png" />
+            <label class="file-button" for="cape-file">Choose Cape</label>
+            <button id="load-default" class="button button-primary" type="button">Default</button>
+
+            <label class="toggle-field">
+              <span class="toggle-copy">Outer layers</span>
+              <input id="toggle-overlays" class="toggle-control" type="checkbox" checked />
+            </label>
+            <label class="toggle-field">
+              <span class="toggle-copy">Cape</span>
+              <input id="toggle-cape" class="toggle-control" type="checkbox" />
+            </label>
+            <label class="toggle-field">
+              <span class="toggle-copy">Slim arms</span>
+              <input id="toggle-slim" class="toggle-control" type="checkbox" />
+            </label>
+            <label class="toggle-field">
+              <span class="toggle-copy">Experimental animation</span>
+              <input id="toggle-animation" class="toggle-control" type="checkbox" />
+            </label>
+            <label class="speed-field">
+              <span>Speed</span>
+              <input
+                id="animation-speed"
+                type="range"
+                min="0.1"
+                max="3.0"
+                step="0.1"
+                value="1.0"
+              />
+            </label>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./bootstrap.js"></script>
   </body>
 </html>
