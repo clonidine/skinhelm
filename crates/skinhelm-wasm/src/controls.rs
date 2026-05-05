@@ -2,7 +2,7 @@ use crate::math::{Mat4, Vec3};
 use crate::model::MeshDebugBounds;
 
 pub const DEFAULT_PROFILE_FOV_DEGREES: f32 = 50.0;
-pub const DEFAULT_PROFILE_ZOOM: f32 = 0.9;
+pub const DEFAULT_PROFILE_ZOOM: f32 = 0.70;
 pub const OVERLAY_ALPHA_DISCARD_THRESHOLD: f32 = 0.00001;
 pub const PROFILE_TARGET: Vec3 = Vec3::new(0.0, 15.5, 0.0);
 pub const PROFILE_FAR_PLANE: f32 = 360.0;
@@ -310,7 +310,7 @@ mod tests {
 
         assert!((controls.yaw - (-15.0_f32).to_radians()).abs() < 0.0001);
         assert!((controls.pitch - 6.0_f32.to_radians()).abs() < 0.0001);
-        assert!((controls.distance - fit_camera_distance(50.0, 0.9)).abs() < 0.0001);
+        assert!((controls.distance - fit_camera_distance(50.0, 0.70)).abs() < 0.0001);
         assert_eq!(controls.target, Vec3::new(0.0, 15.5, 0.0));
     }
 
@@ -339,13 +339,13 @@ mod tests {
         assert!((camera.yaw_degrees - -15.0).abs() < 0.0001);
         assert!((camera.pitch_degrees - 6.0).abs() < 0.0001);
         assert!((camera.fov_degrees - 50.0).abs() < 0.0001);
-        assert!((camera.zoom - 0.9).abs() < 0.0001);
+        assert!((camera.zoom - 0.70).abs() < 0.0001);
     }
 
     #[test]
     fn camera_fit_distance_matches_default_formula() {
-        let distance = fit_camera_distance(50.0, 0.9);
-        let expected = 4.5 + 16.5 / (50.0_f32.to_radians() * 0.5).tan() / 0.9;
+        let distance = fit_camera_distance(50.0, 0.70);
+        let expected = 4.5 + 16.5 / (50.0_f32.to_radians() * 0.5).tan() / 0.70;
 
         assert!((distance - expected).abs() < 0.0001);
     }
@@ -366,7 +366,7 @@ mod tests {
 
         assert!((-1.0..=1.0).contains(&feet));
         assert!((-1.0..=1.0).contains(&headwear_top));
-        assert!((0.78..=0.82).contains(&canvas_coverage));
+        assert!((0.62..=0.65).contains(&canvas_coverage));
     }
 
     #[test]
