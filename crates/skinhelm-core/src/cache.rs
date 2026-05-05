@@ -74,6 +74,12 @@ impl AppCache {
     }
 }
 
+impl Default for AppCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 async fn get_cache_value<K, V>(cache: &RwLock<HashMap<K, CacheEntry<V>>>, key: &K) -> Option<V>
 where
     K: Eq + std::hash::Hash + Clone,

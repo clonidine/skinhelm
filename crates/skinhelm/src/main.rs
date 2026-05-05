@@ -1,18 +1,13 @@
-mod cache;
-mod error;
-mod mojang;
-mod render;
 mod routes;
 mod shutdown;
-mod types;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use cache::AppCache;
-use mojang::MojangClient;
 use routes::create_router;
 use shutdown::shutdown_signal;
+use skinhelm_core::cache::AppCache;
+use skinhelm_core::mojang::MojangClient;
 use tracing::info;
 
 #[derive(Clone)]

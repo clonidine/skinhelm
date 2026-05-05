@@ -1,0 +1,12 @@
+[package]
+name = "skinhelm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+skinhelm-core = { path = "../skinhelm-core" }
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "json", "query"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "net", "signal"] }
+serde = { version = "1", features = ["derive"] }
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }

@@ -4,13 +4,60 @@ use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderValue, Response, StatusCode};
+use axum::response::{IntoResponse, Response as AxumResponse};
 use axum::routing::get;
 use axum::{Json, Router};
+use serde::Serialize;
+use skinhelm_core::error::AppError;
+use skinhelm_core::render::render_helm_png;
+use skinhelm_core::types::{parse_player, parse_size, PlayerInput};
 
-use crate::error::AppError;
-use crate::render::render_helm_png;
-use crate::types::{parse_player, parse_size, HealthResponse, PlayerInput};
 use crate::AppState;
+
+#[derive(Debug, Serialize)]
+struct HealthResponse {
+    status: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ErrorResponse {
+    error: &'static str,
+}
+
+struct HttpError(AppError);
+
+impl From<AppError> for HttpError {
+    fn from(error: AppError) -> Self {
+        Self(error)
+    }
+}
+
+impl IntoResponse for HttpError {
+    fn into_response(self) -> AxumResponse {
+        let status = if self.0.is_bad_request() {
+            StatusCode::BAD_REQUEST
+        } else if self.0.is_not_found() {
+            StatusCode::NOT_FOUND
+        } else if self.0.is_internal() {
+            StatusCode::INTERNAL_SERVER_ERROR
+        } else {
+            StatusCode::BAD_GATEWAY
+        };
+        let message = self.0.message();
+
+        match status {
+            StatusCode::INTERNAL_SERVER_ERROR => {
+                tracing::error!(error = ?self.0, "internal error");
+            }
+            StatusCode::BAD_GATEWAY => {
+                tracing::warn!(error = ?self.0, "upstream error");
+            }
+            _ => {}
+        }
+
+        (status, Json(ErrorResponse { error: message })).into_response()
+    }
+}
 
 pub fn create_router(state: AppState) -> Router {
     Router::new()
@@ -27,7 +74,7 @@ async fn helm(
     State(state): State<AppState>,
     Path(player): Path<String>,
     Query(query): Query<HashMap<String, String>>,
-) -> Result<Response<Body>, AppError> {
+) -> Result<Response<Body>, HttpError> {
     let size = parse_size(query.get("size").map(String::as_str))?;
     let player = parse_player(&player)?;
 
@@ -80,7 +127,7 @@ async fn resolve_skin_url_cached(state: &AppState, uuid: &str) -> Result<String,
     Ok(skin_url)
 }
 
-fn png_response(png: Vec<u8>) -> Result<Response<Body>, AppError> {
+fn png_response(png: Vec<u8>) -> Result<Response<Body>, HttpError> {
     let mut response = Response::new(Body::from(png));
     *response.status_mut() = StatusCode::OK;
     response

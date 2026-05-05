@@ -19,6 +19,13 @@
 - Stable Rust toolchain.
 - Network access to Mojang APIs and the returned skin texture URLs.
 
+## Workspace Layout
+
+`skinhelm` is organized as a small Cargo workspace:
+
+- `crates/skinhelm`: HTTP server, Axum routes, application state, logging setup, and graceful shutdown.
+- `crates/skinhelm-core`: Mojang client, validation, cache, PNG rendering, shared types, and domain errors.
+
 ## Run Locally
 
 ```sh

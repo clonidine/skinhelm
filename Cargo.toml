@@ -1,15 +1,7 @@
-[package]
-name = "skinhelm"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "crates/skinhelm",
+    "crates/skinhelm-core",
+]
 
-[dependencies]
-axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "json", "query"] }
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-base64 = "0.22"
-image = { version = "0.25", default-features = false, features = ["png"] }
-tracing = { version = "0.1", default-features = false, features = ["std"] }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }
+resolver = "2"

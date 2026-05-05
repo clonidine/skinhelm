@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::error::AppError;
 
@@ -10,16 +10,6 @@ pub const MAX_SIZE: u32 = 512;
 pub enum PlayerInput {
     Uuid(String),
     Username(String),
-}
-
-#[derive(Debug, Serialize)]
-pub struct HealthResponse {
-    pub status: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: &'static str,
 }
 
 #[derive(Debug, Deserialize)]

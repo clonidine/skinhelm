@@ -974,6 +974,17 @@ name = "skinhelm"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "serde",
+ "skinhelm-core",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "skinhelm-core"
+version = "0.1.0"
+dependencies = [
  "base64",
  "image",
  "reqwest",
@@ -981,7 +992,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
