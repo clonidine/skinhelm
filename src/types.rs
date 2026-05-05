@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 
-pub const DEFAULT_SIZE: u32 = 128;
+pub const DEFAULT_SIZE: u32 = 180;
 pub const MIN_SIZE: u32 = 8;
 pub const MAX_SIZE: u32 = 512;
 
@@ -163,8 +163,8 @@ mod tests {
     }
 
     #[test]
-    fn defaults_missing_size_to_128() {
-        assert_eq!(parse_size(None).expect("default size"), 128);
+    fn defaults_missing_size_to_180() {
+        assert_eq!(parse_size(None).expect("default size"), 180);
     }
 
     #[test]

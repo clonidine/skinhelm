@@ -55,7 +55,7 @@ Cache-Control: public, max-age=3600
 ## Query Parameters
 
 - `size`: optional output size in pixels.
-- Default: `128`.
+- Default: `180`.
 - Minimum: `8`.
 - Maximum: `512`.
 
@@ -63,8 +63,16 @@ Invalid `size` values return HTTP `400`.
 
 ## Curl Examples
 
+Default `180x180` output:
+
 ```sh
-curl -o head.png "http://localhost:3000/helm/bc881e0292164f6ea80f7b9df0ccf9e9?size=128"
+curl -o head.png "http://localhost:3000/helm/bc881e0292164f6ea80f7b9df0ccf9e9"
+```
+
+Explicit `180x180` output:
+
+```sh
+curl -o head.png "http://localhost:3000/helm/bc881e0292164f6ea80f7b9df0ccf9e9?size=180"
 ```
 
 ```sh
