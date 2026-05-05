@@ -102,7 +102,7 @@ function setDockOpen(open) {
   dockToggle.title = open ? "Hide controls" : "Show controls";
 }
 
-async function loadRequestedPlayer(viewer) {
+async function loadRequestedPlayer(viewer, requestRender) {
   const player = playerInput.value.trim();
   if (!player) {
     return;
@@ -110,6 +110,7 @@ async function loadRequestedPlayer(viewer) {
 
   try {
     await loadPlayerSkin(viewer, player);
+    requestRender();
   } catch (error) {
     setStatus(String(error));
   }
@@ -127,36 +128,64 @@ async function main() {
     const presetStatus = viewer.set_preset(preset);
     setStatus(presetStatus);
   }
-  dockToggle.addEventListener("click", () => {
-    setDockOpen(document.documentElement.dataset.dock !== "open");
-  });
-
   let pointerActive = false;
   let pendingPointerMove = null;
+  let frameRequest = null;
+
+  const requestRender = () => {
+    if (frameRequest !== null) {
+      return;
+    }
+    frameRequest = requestAnimationFrame(frame);
+  };
+
+  const frame = (timestamp) => {
+    frameRequest = null;
+    try {
+      if (pendingPointerMove) {
+        viewer.pointer_move(pendingPointerMove.x, pendingPointerMove.y);
+        pendingPointerMove = null;
+      }
+      viewer.render_frame(timestamp);
+    } catch (error) {
+      setStatus(String(error));
+    }
+    if (toggleAnimation.checked) {
+      requestRender();
+    }
+  };
+
+  dockToggle.addEventListener("click", () => {
+    setDockOpen(document.documentElement.dataset.dock !== "open");
+    requestRender();
+  });
+
   const initialPlayer = skinPlayerFromPath();
   if (initialPlayer) {
     playerInput.value = initialPlayer;
     try {
       await loadPlayerSkin(viewer, initialPlayer);
+      requestRender();
     } catch (error) {
       setStatus(String(error));
     }
   }
 
   loadPlayer.addEventListener("click", () => {
-    loadRequestedPlayer(viewer);
+    loadRequestedPlayer(viewer, requestRender);
   });
 
   playerInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      loadRequestedPlayer(viewer);
+      loadRequestedPlayer(viewer, requestRender);
     }
   });
 
   loadDefault.addEventListener("click", () => {
     try {
       viewer.load_default_skin();
+      requestRender();
     } catch (error) {
       setStatus(String(error));
     }
@@ -171,6 +200,7 @@ async function main() {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       viewer.load_skin_bytes_with_model(bytes, toggleSlim.checked);
+      requestRender();
     } catch (error) {
       setStatus(String(error));
     }
@@ -180,6 +210,7 @@ async function main() {
     const file = capeFile.files && capeFile.files[0];
     if (!file) {
       viewer.set_cape_visible(toggleCape.checked);
+      requestRender();
       return;
     }
 
@@ -187,6 +218,7 @@ async function main() {
       const bytes = new Uint8Array(await file.arrayBuffer());
       viewer.load_cape_bytes(bytes);
       toggleCape.checked = true;
+      requestRender();
     } catch (error) {
       setStatus(String(error));
     }
@@ -194,10 +226,12 @@ async function main() {
 
   toggleAnimation.addEventListener("change", () => {
     syncAnimationControls(viewer);
+    requestRender();
   });
 
   toggleOverlays.addEventListener("change", () => {
     viewer.set_overlays_enabled(toggleOverlays.checked);
+    requestRender();
   });
 
   toggleCape.addEventListener("change", () => {
@@ -205,16 +239,19 @@ async function main() {
     if (message === "No cape loaded") {
       toggleCape.checked = false;
     }
+    requestRender();
   });
 
   animationSpeed.addEventListener("input", () => {
     viewer.set_animation_speed(Number(animationSpeed.value));
+    requestRender();
   });
 
   canvas.addEventListener("mousedown", (event) => {
     event.preventDefault();
     pointerActive = true;
     viewer.pointer_down(event.clientX, event.clientY);
+    requestRender();
   });
 
   window.addEventListener("mousemove", (event) => {
@@ -223,12 +260,14 @@ async function main() {
     }
     event.preventDefault();
     pendingPointerMove = { x: event.clientX, y: event.clientY };
+    requestRender();
   });
 
   window.addEventListener("mouseup", () => {
     pointerActive = false;
     pendingPointerMove = null;
     viewer.pointer_up();
+    requestRender();
   });
 
   canvas.addEventListener(
@@ -236,6 +275,7 @@ async function main() {
     (event) => {
       event.preventDefault();
       viewer.wheel(event.deltaY);
+      requestRender();
     },
     { passive: false },
   );
@@ -243,24 +283,13 @@ async function main() {
   window.addEventListener("resize", () => {
     try {
       viewer.resize();
+      requestRender();
     } catch (error) {
       setStatus(String(error));
     }
   });
 
-  const frame = (timestamp) => {
-    try {
-      if (pendingPointerMove) {
-        viewer.pointer_move(pendingPointerMove.x, pendingPointerMove.y);
-        pendingPointerMove = null;
-      }
-      viewer.render_frame(timestamp);
-    } catch (error) {
-      setStatus(String(error));
-    }
-    requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
+  requestRender();
 }
 
 main().catch((error) => setStatus(String(error)));
