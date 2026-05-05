@@ -1,41 +1,59 @@
 # skinhelm
 
-`skinhelm` is a small Rust HTTP service that renders 2D Minecraft skin heads with the front helmet / hat layer composited over the base face. It accepts a Minecraft username or UUID, resolves the Mojang profile, downloads the skin PNG, and returns a square PNG scaled with nearest-neighbor filtering.
+`skinhelm` is a Rust workspace for viewing Minecraft skins. Its main experience is a browser-based 3D skin viewer built with WebAssembly and WebGL2, backed by a small Axum service that can resolve Minecraft usernames or UUIDs through Mojang, fetch official skins and capes, and serve the viewer as a self-contained web page.
 
-## Features
+The project also includes a lightweight 2D helmeted-head PNG endpoint for integrations that only need a square avatar image.
 
-- `GET /health` health check.
-- `GET /helm/{player}` for usernames, hyphenated UUIDs, or compact UUIDs.
-- Mojang username resolution and sessionserver profile lookup.
-- Base64 `textures` decoding and skin URL extraction.
-- Minecraft `64x64` skin support with helmet / hat overlay.
-- Legacy `64x32` skin support without overlay.
-- Pixel-perfect nearest-neighbor scaling.
-- In-memory TTL cache for username resolution, skin URLs, and rendered PNGs.
-- Structured application logging through `tracing`.
+## What It Does
 
-## Requirements
+- Runs a full 3D Minecraft skin viewer in the browser.
+- Uses Rust compiled to WebAssembly through `wasm-bindgen`.
+- Renders with WebGL2 directly through `web-sys`, without an external 3D engine.
+- Supports modern `64x64` skins and legacy `64x32` skins.
+- Supports classic and slim/Alex player models.
+- Renders outer layers such as hat, jacket, sleeves, and pants.
+- Supports local skin and cape PNG uploads in the viewer UI.
+- Loads official skins and capes by Minecraft username or UUID when served by the backend.
+- Keeps pixel-art textures sharp with nearest-neighbor filtering.
+- Provides orbit, zoom, resize-aware rendering, and optional experimental walk animation.
+- Exposes `GET /helm/{player}` for simple 2D avatar PNG generation.
 
-- Stable Rust toolchain.
-- Network access to Mojang APIs and the returned skin texture URLs.
+## Quick Start
 
-## Workspace Layout
+Requirements:
 
-`skinhelm` is organized as a small Cargo workspace:
+- Stable Rust.
+- `wasm32-unknown-unknown` target.
+- `wasm-pack`.
+- Node.js and npm if you plan to develop or rebuild the browser UI.
+- A browser with WebGL2 support.
+- Network access to Mojang APIs and texture URLs for official player loading.
 
-- `crates/skinhelm`: HTTP server, Axum routes, application state, logging setup, and graceful shutdown.
-- `crates/skinhelm-core`: Mojang client, validation, cache, PNG rendering, shared types, and domain errors.
-- `crates/skinhelm-wasm`: WebAssembly/WebGL browser viewer for complete 3D Minecraft skins, slim/classic models, optional experimental animation, and local or official capes.
+Install the WASM target if needed:
 
-The HTTP server can optionally expose the WASM viewer when built with:
+```sh
+rustup target add wasm32-unknown-unknown
+```
+
+Build the WebAssembly viewer package:
+
+```sh
+wasm-pack build crates/skinhelm-wasm --target web
+```
+
+Run the backend with the embedded viewer:
 
 ```sh
 cargo run -p skinhelm --features wasm-viewer
 ```
 
-Then open `http://localhost:3000/viewer`.
+Open:
 
-To open the viewer with a Minecraft skin resolved by username or UUID, including slim/classic metadata and official cape when Mojang provides one:
+```text
+http://localhost:3000/viewer/
+```
+
+You can also open the viewer with an official player skin preloaded:
 
 ```text
 http://localhost:3000/viewer/Steve
@@ -45,133 +63,86 @@ http://localhost:3000/viewer/Steve
 http://localhost:3000/viewer/bc881e0292164f6ea80f7b9df0ccf9e9
 ```
 
-## Run Locally
+In that flow, the backend resolves the player, downloads the skin, detects whether the model is `classic` or `slim`, and loads an official cape when Mojang provides one.
+
+## Local Viewer Development
+
+For browser UI development:
 
 ```sh
-cargo run
+cd crates/skinhelm-wasm
+wasm-pack build --target web
+npm install
+npm run dev
 ```
 
-The service binds to `0.0.0.0:3000`.
+Vite serves the viewer on `127.0.0.1`; use the URL printed in the terminal.
 
-## Endpoints
+For a production browser build:
 
-### `GET /health`
-
-Returns:
-
-```json
-{ "status": "ok" }
+```sh
+cd crates/skinhelm-wasm
+wasm-pack build --target web
+npm install
+npm run build
 ```
 
-### `GET /helm/{player}`
+## Workspace Overview
 
-`player` may be:
+The workspace is split into three crates with clear responsibilities:
 
-- A Minecraft username.
-- A UUID with hyphens.
-- A UUID without hyphens.
+- `crates/skinhelm-wasm` owns the browser experience: the WebAssembly/WebGL2 viewer, the viewer UI, skin and cape loading, 3D model rendering, camera controls, and animation.
+- `crates/skinhelm` owns the HTTP surface: the Axum server, viewer routes, embedded WASM assets, Mojang-backed skin/cape responses, health checks, and the 2D avatar endpoint.
+- `crates/skinhelm-core` owns the shared domain logic: Mojang API access, player validation, caching, common error types, and 2D PNG rendering.
 
-Successful responses return `image/png` with:
+## HTTP Routes
 
-```text
-Content-Type: image/png
-Cache-Control: public, max-age=3600
-```
+When running with `--features wasm-viewer`:
 
-## Query Parameters
+- `GET /viewer/`: serves the 3D viewer.
+- `GET /viewer/{player}`: serves the viewer and loads a username or UUID.
+- `GET /viewer/skin/{player}`: returns the official skin PNG plus viewer metadata headers.
+- `GET /viewer/cape/{player}`: returns the official cape PNG when available.
 
-- `size`: optional output size in pixels.
+Always available:
+
+- `GET /health`: returns `{ "status": "ok" }`.
+- `GET /helm/{player}`: returns a 2D helmeted-head PNG.
+
+`/helm/{player}` accepts a Minecraft username, a hyphenated UUID, or a compact UUID. It also accepts an optional `size` query parameter:
+
 - Default: `180`.
 - Minimum: `8`.
 - Maximum: `512`.
 
-Invalid `size` values return HTTP `400`.
-
-## Curl Examples
-
-Default `180x180` output:
+Examples:
 
 ```sh
 curl -o head.png "http://localhost:3000/helm/bc881e0292164f6ea80f7b9df0ccf9e9"
-```
-
-Explicit `180x180` output:
-
-```sh
-curl -o head.png "http://localhost:3000/helm/bc881e0292164f6ea80f7b9df0ccf9e9?size=180"
-```
-
-```sh
 curl -o steve.png "http://localhost:3000/helm/Steve?size=256"
-```
-
-```sh
 curl "http://localhost:3000/health"
 ```
 
-## Minecraft Skin Coordinates
+## Caching
 
-For modern `64x64` skins, `skinhelm` uses the standard front head regions:
-
-- Base head front: `x = 8`, `y = 8`, `width = 8`, `height = 8`.
-- Helmet / hat overlay front: `x = 40`, `y = 8`, `width = 8`, `height = 8`.
-
-The base face is rendered first. The overlay is alpha-composited on top, preserving transparency. The final `8x8` result is resized to `size x size` using nearest-neighbor filtering, so the output stays sharp and pixel-perfect.
-
-For legacy `64x32` skins, the overlay is ignored and only the base head front is rendered.
-
-## Caching Behavior
-
-`skinhelm` uses an internal in-memory cache implemented with `HashMap` and `tokio::sync::RwLock`.
+The backend uses an in-memory cache for Mojang lookups and rendered 2D PNGs:
 
 - Username to UUID: 6 hours.
 - UUID to skin URL: 30 minutes.
-- Skin URL plus size to rendered PNG: 30 minutes.
+- Skin URL plus output size to rendered PNG: 30 minutes.
 
-Expired entries are cleaned lazily during cache access and writes. There is no external cache dependency.
+There is no external cache dependency; cached data is cleared when the process restarts.
 
-## Logging
-
-Application logs use `tracing` and `tracing-subscriber`. The server logs startup, cache hits at debug level, and upstream or internal errors with structured fields where useful.
-
-## Error Responses
-
-All JSON errors use:
-
-```json
-{ "error": "short message" }
-```
-
-Status mapping:
-
-- `400`: invalid player or invalid size.
-- `404`: username not found or profile has no skin.
-- `502`: Mojang request failure, malformed upstream data, texture decode failure, texture JSON failure, skin download failure, or invalid downloaded PNG.
-- `500`: unexpected internal error.
-
-## Test Commands
+## Quality Commands
 
 ```sh
 cargo fmt
 cargo clippy -- -D warnings
 cargo test
-```
-
-## Release Build
-
-```sh
-cargo build --release
+cargo clippy -p skinhelm-wasm --target wasm32-unknown-unknown -- -D warnings
 ```
 
 ## Known Limitations
 
-- The service renders only the flat 2D front head with optional helmet / hat overlay.
-- It does not render 3D cubes, lighting, shadows, perspective, or smoothing.
-- Cache is process-local and is cleared when the service restarts.
-- Mojang and texture CDN availability directly affect uncached requests.
-
-## Future Extension Ideas
-
-- `/avatar`
-- `/head`
-- `/headhelm`
+- PNG export is not supported.
+- Elytra rendering is not implemented.
