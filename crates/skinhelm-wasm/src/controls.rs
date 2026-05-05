@@ -32,26 +32,31 @@ pub struct CameraPreset {
 }
 
 impl ViewerPreset {
+    #[inline]
     pub fn from_query_value(_value: &str) -> Self {
         Self::Default
     }
 
+    #[inline]
     pub fn query_value(self) -> &'static str {
         match self {
             Self::Default => "default",
         }
     }
 
+    #[inline]
     pub fn uses_skinview3d_hierarchy(self) -> bool {
         false
     }
 
+    #[inline]
     pub fn light_mode(self) -> LightMode {
         match self {
             Self::Default => LightMode::Default,
         }
     }
 
+    #[inline]
     pub fn camera(self) -> CameraPreset {
         match self {
             Self::Default => CameraPreset {
@@ -91,10 +96,12 @@ pub struct OrbitControls {
 }
 
 impl OrbitControls {
+    #[inline]
     pub fn new() -> Self {
         Self::with_preset(ViewerPreset::Default)
     }
 
+    #[inline]
     pub fn with_preset(preset: ViewerPreset) -> Self {
         let camera = preset.camera();
         Self {
@@ -108,6 +115,7 @@ impl OrbitControls {
         }
     }
 
+    #[inline]
     pub fn apply_preset(&mut self, preset: ViewerPreset) {
         let next = Self::with_preset(preset);
         self.yaw = next.yaw;
@@ -116,12 +124,14 @@ impl OrbitControls {
         self.target = next.target;
     }
 
+    #[inline]
     pub fn pointer_down(&mut self, x: f32, y: f32) {
         self.dragging = true;
         self.last_x = x;
         self.last_y = y;
     }
 
+    #[inline]
     pub fn pointer_move(&mut self, x: f32, y: f32) {
         if !self.dragging {
             return;
@@ -134,31 +144,38 @@ impl OrbitControls {
         self.pitch = (self.pitch + dy * 0.01).clamp(-1.2, 1.2);
     }
 
+    #[inline]
     pub fn pointer_up(&mut self) {
         self.dragging = false;
     }
 
+    #[inline]
     pub fn zoom(&mut self, delta_y: f32) {
         self.distance =
             (self.distance + delta_y * 0.04).clamp(MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE);
     }
 
+    #[inline(always)]
     pub fn distance(&self) -> f32 {
         self.distance
     }
 
+    #[inline(always)]
     pub fn target(&self) -> Vec3 {
         self.target
     }
 
+    #[inline]
     pub fn camera_light_direction(&self) -> Vec3 {
         self.eye_position().subtract(self.target).normalize()
     }
 
+    #[inline]
     pub fn view_matrix(&self) -> Mat4 {
         Mat4::look_at(self.eye_position(), self.target, Vec3::new(0.0, 1.0, 0.0))
     }
 
+    #[inline]
     fn eye_position(&self) -> Vec3 {
         let cos_pitch = self.pitch.cos();
         Vec3::new(
@@ -170,15 +187,18 @@ impl OrbitControls {
 }
 
 impl Default for OrbitControls {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[inline]
 pub fn default_profile_projection(aspect: f32) -> Mat4 {
     profile_projection(ViewerPreset::Default, aspect)
 }
 
+#[inline]
 pub fn profile_projection(preset: ViewerPreset, aspect: f32) -> Mat4 {
     Mat4::perspective(
         preset.camera().fov_degrees.to_radians(),
@@ -188,12 +208,14 @@ pub fn profile_projection(preset: ViewerPreset, aspect: f32) -> Mat4 {
     )
 }
 
+#[inline]
 pub fn fit_camera_distance(fov_degrees: f32, zoom: f32) -> f32 {
     let safe_zoom = zoom.max(0.0001);
     let distance = 4.5 + 16.5 / (fov_degrees.to_radians() * 0.5).tan() / safe_zoom;
     distance.clamp(MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE)
 }
 
+#[inline]
 pub fn presentation_matrix(preset: ViewerPreset, bounds: MeshDebugBounds) -> Mat4 {
     let _ = (preset, bounds);
     Mat4::identity()
@@ -244,6 +266,7 @@ pub fn projected_bounds_metrics(
     }
 }
 
+#[inline]
 fn bounds_corners(bounds: MeshDebugBounds) -> [Vec3; 8] {
     [
         Vec3::new(bounds.min.x, bounds.min.y, bounds.min.z),
@@ -257,6 +280,7 @@ fn bounds_corners(bounds: MeshDebugBounds) -> [Vec3; 8] {
     ]
 }
 
+#[inline]
 pub fn debug_head_front_view_matrix() -> Mat4 {
     Mat4::look_at(
         Vec3::new(0.0, 28.0, 64.0),
@@ -265,6 +289,7 @@ pub fn debug_head_front_view_matrix() -> Mat4 {
     )
 }
 
+#[inline]
 pub fn debug_head_front_view_matrix_for_preset(preset: ViewerPreset) -> Mat4 {
     let _ = preset;
     debug_head_front_view_matrix()

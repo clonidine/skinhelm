@@ -390,6 +390,7 @@ impl Renderer {
         self.model_bounds
     }
 
+    #[inline]
     pub fn model_part_bounds(&self) -> &[MeshPartDebugBounds] {
         &self.model_part_bounds
     }
@@ -445,6 +446,7 @@ impl Renderer {
         })
     }
 
+    #[inline]
     fn set_debug_solid(&self, enabled: bool) {
         self.gl
             .uniform1i(Some(&self.debug_solid_uniform), i32::from(enabled));
@@ -452,11 +454,13 @@ impl Renderer {
             .uniform4f(Some(&self.debug_color_uniform), 0.35, 0.82, 0.96, 1.0);
     }
 
+    #[inline]
     fn set_unlit(&self, enabled: bool) {
         self.gl
             .uniform1i(Some(&self.unlit_uniform), i32::from(enabled));
     }
 
+    #[inline]
     fn set_viewer_preset(&self, preset: ViewerPreset, camera_light_dir: Vec3) {
         let (clear, ambient, directional, light_dir) = match preset.light_mode() {
             LightMode::Default => ([0.055, 0.06, 0.075, 1.0], 0.70, 0.35, camera_light_dir),
@@ -523,6 +527,7 @@ impl Renderer {
     }
 }
 
+#[inline]
 fn model_style(preset: ViewerPreset) -> PlayerModelStyle {
     if preset.uses_skinview3d_hierarchy() {
         PlayerModelStyle::Skinview3d1To1

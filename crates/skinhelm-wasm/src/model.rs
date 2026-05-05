@@ -31,10 +31,12 @@ pub struct UvRect {
 }
 
 impl UvRect {
+    #[inline(always)]
     pub const fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
         Self { x, y, w, h }
     }
 
+    #[inline]
     pub fn normalized(self, skin_width: f32, skin_height: f32) -> NormalizedUv {
         NormalizedUv {
             left: (self.x + 0.5) / skin_width,
@@ -206,6 +208,7 @@ pub fn mesh_debug_bounds(mesh: &Mesh) -> MeshDebugBounds {
     bounds_from_min_max(min, max)
 }
 
+#[inline]
 fn bounds_from_min_max(min: Vec3, max: Vec3) -> MeshDebugBounds {
     MeshDebugBounds {
         min,
@@ -435,6 +438,7 @@ fn build_skinview3d_player_meshes(format: SkinFormat, variant: ModelVariant) -> 
         .collect()
 }
 
+#[inline]
 pub fn part_model_matrix(part: BodyPart, pivot: Vec3, pose: WalkPose) -> Mat4 {
     let angle = match part {
         BodyPart::RightLeg => pose.right_leg_x,
@@ -576,6 +580,7 @@ fn build_mesh(spec: PartSpec, skin_width: f32, skin_height: f32) -> Mesh {
     }
 }
 
+#[inline]
 fn push_face(vertices: &mut Vec<f32>, positions: [Vec3; 4], uv: NormalizedUv, normal: Vec3) {
     let uvs = [
         [uv.left, uv.bottom],
@@ -892,6 +897,7 @@ fn leg_uv() -> FaceUvs {
     }
 }
 
+#[inline]
 fn arm_width(variant: ModelVariant) -> f32 {
     match variant {
         ModelVariant::Classic => 4.0,
@@ -963,6 +969,7 @@ fn left_sleeve_uv(variant: ModelVariant) -> FaceUvs {
     )
 }
 
+#[inline]
 fn arm_uv(variant: ModelVariant, layout: ArmUvLayout) -> FaceUvs {
     let width = arm_width(variant);
     FaceUvs {

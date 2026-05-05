@@ -6,14 +6,17 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
+    #[inline(always)]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 
+    #[inline(always)]
     pub fn subtract(self, other: Self) -> Self {
         Self::new(self.x - other.x, self.y - other.y, self.z - other.z)
     }
 
+    #[inline]
     pub fn cross(self, other: Self) -> Self {
         Self::new(
             self.y * other.z - self.z * other.y,
@@ -22,10 +25,12 @@ impl Vec3 {
         )
     }
 
+    #[inline(always)]
     pub fn dot(self, other: Self) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
+    #[inline]
     pub fn normalize(self) -> Self {
         let length = (self.dot(self)).sqrt();
         if length <= f32::EPSILON {
@@ -41,6 +46,7 @@ pub struct Mat4 {
 }
 
 impl Mat4 {
+    #[inline(always)]
     pub const fn identity() -> Self {
         Self {
             m: [
@@ -49,6 +55,7 @@ impl Mat4 {
         }
     }
 
+    #[inline]
     pub fn translation(x: f32, y: f32, z: f32) -> Self {
         let mut matrix = Self::identity();
         matrix.m[12] = x;
@@ -57,6 +64,7 @@ impl Mat4 {
         matrix
     }
 
+    #[inline]
     pub fn scale(x: f32, y: f32, z: f32) -> Self {
         Self {
             m: [
@@ -65,6 +73,7 @@ impl Mat4 {
         }
     }
 
+    #[inline]
     pub fn rotation_x(angle: f32) -> Self {
         let (sin, cos) = angle.sin_cos();
         Self {
@@ -74,6 +83,7 @@ impl Mat4 {
         }
     }
 
+    #[inline]
     pub fn rotation_y(angle: f32) -> Self {
         let (sin, cos) = angle.sin_cos();
         Self {
@@ -83,6 +93,7 @@ impl Mat4 {
         }
     }
 
+    #[inline]
     pub fn perspective(fovy_radians: f32, aspect: f32, near: f32, far: f32) -> Self {
         let f = 1.0 / (fovy_radians * 0.5).tan();
         let nf = 1.0 / (near - far);
@@ -108,6 +119,7 @@ impl Mat4 {
         }
     }
 
+    #[inline]
     pub fn look_at(eye: Vec3, center: Vec3, up: Vec3) -> Self {
         let f = center.subtract(eye).normalize();
         let s = f.cross(up.normalize()).normalize();
@@ -135,19 +147,34 @@ impl Mat4 {
         }
     }
 
+    #[inline]
     pub fn multiply(self, rhs: Self) -> Self {
-        let mut out = [0.0; 16];
-        for col in 0..4 {
-            for row in 0..4 {
-                out[col * 4 + row] = self.m[row] * rhs.m[col * 4]
-                    + self.m[4 + row] * rhs.m[col * 4 + 1]
-                    + self.m[8 + row] * rhs.m[col * 4 + 2]
-                    + self.m[12 + row] * rhs.m[col * 4 + 3];
-            }
+        let a = self.m;
+        let b = rhs.m;
+
+        Self {
+            m: [
+                a[0] * b[0] + a[4] * b[1] + a[8] * b[2] + a[12] * b[3],
+                a[1] * b[0] + a[5] * b[1] + a[9] * b[2] + a[13] * b[3],
+                a[2] * b[0] + a[6] * b[1] + a[10] * b[2] + a[14] * b[3],
+                a[3] * b[0] + a[7] * b[1] + a[11] * b[2] + a[15] * b[3],
+                a[0] * b[4] + a[4] * b[5] + a[8] * b[6] + a[12] * b[7],
+                a[1] * b[4] + a[5] * b[5] + a[9] * b[6] + a[13] * b[7],
+                a[2] * b[4] + a[6] * b[5] + a[10] * b[6] + a[14] * b[7],
+                a[3] * b[4] + a[7] * b[5] + a[11] * b[6] + a[15] * b[7],
+                a[0] * b[8] + a[4] * b[9] + a[8] * b[10] + a[12] * b[11],
+                a[1] * b[8] + a[5] * b[9] + a[9] * b[10] + a[13] * b[11],
+                a[2] * b[8] + a[6] * b[9] + a[10] * b[10] + a[14] * b[11],
+                a[3] * b[8] + a[7] * b[9] + a[11] * b[10] + a[15] * b[11],
+                a[0] * b[12] + a[4] * b[13] + a[8] * b[14] + a[12] * b[15],
+                a[1] * b[12] + a[5] * b[13] + a[9] * b[14] + a[13] * b[15],
+                a[2] * b[12] + a[6] * b[13] + a[10] * b[14] + a[14] * b[15],
+                a[3] * b[12] + a[7] * b[13] + a[11] * b[14] + a[15] * b[15],
+            ],
         }
-        Self { m: out }
     }
 
+    #[inline]
     pub fn transform_point(self, point: Vec3) -> Vec3 {
         Vec3::new(
             self.m[0] * point.x + self.m[4] * point.y + self.m[8] * point.z + self.m[12],

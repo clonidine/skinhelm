@@ -23,6 +23,7 @@ const BODY_BOB_PIXELS: f32 = 0.18;
 const CAPE_REST_RADIANS: f32 = std::f32::consts::PI * 0.06;
 const CAPE_REACTIVE_MIN_WALK_RADIANS: f32 = std::f32::consts::PI * 0.09;
 
+#[inline]
 pub fn static_pose() -> WalkPose {
     WalkPose {
         right_leg_x: 0.0,
@@ -35,6 +36,7 @@ pub fn static_pose() -> WalkPose {
     }
 }
 
+#[inline]
 pub fn walk_pose(phase: f32) -> WalkPose {
     let leg_swing = phase.sin() * LEG_SWING_RADIANS;
     let arm_swing = phase.sin() * ARM_SWING_RADIANS;
@@ -50,12 +52,14 @@ pub fn walk_pose(phase: f32) -> WalkPose {
     }
 }
 
+#[inline]
 pub fn cape_reactive_walk_pose(phase: f32) -> WalkPose {
     let mut pose = walk_pose(phase);
     pose.cape_x = cape_reactive_walk_rotation_x(pose);
     pose
 }
 
+#[inline]
 pub fn cape_rotation_x(motion: CapeMotion, t: f32) -> f32 {
     match motion {
         CapeMotion::Stopped => CAPE_REST_RADIANS,
@@ -65,6 +69,7 @@ pub fn cape_rotation_x(motion: CapeMotion, t: f32) -> f32 {
     }
 }
 
+#[inline]
 fn cape_reactive_walk_rotation_x(pose: WalkPose) -> f32 {
     let arm_contact = pose.right_arm_x.max(pose.left_arm_x).max(0.0);
     let leg_contact = pose.right_leg_x.max(pose.left_leg_x).max(0.0);
