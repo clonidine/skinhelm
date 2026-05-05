@@ -83,8 +83,10 @@ pub struct MeshDebugBounds {
     pub center: Vec3,
 }
 
+#[cfg(any(debug_assertions, test))]
 pub type PlayerDebugBounds = MeshDebugBounds;
 
+#[cfg(any(debug_assertions, test))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MeshPartDebugBounds {
     pub part: BodyPart,
@@ -114,6 +116,7 @@ pub struct Skinview3dHierarchy {
     pub parts: Vec<Skinview3dPartNode>,
 }
 
+#[cfg(any(debug_assertions, test))]
 pub fn debug_head_bounds() -> MeshDebugBounds {
     let meshes = build_player_meshes(SkinFormat::Modern64x64, ModelVariant::Classic);
     let head = meshes
@@ -123,11 +126,13 @@ pub fn debug_head_bounds() -> MeshDebugBounds {
     mesh_debug_bounds(head)
 }
 
+#[cfg(any(debug_assertions, test))]
 pub fn player_debug_bounds(format: SkinFormat, variant: ModelVariant) -> PlayerDebugBounds {
     let meshes = build_player_meshes(format, variant);
     meshes_debug_bounds(meshes.iter())
 }
 
+#[cfg(any(debug_assertions, test))]
 pub fn player_debug_bounds_for_style(
     format: SkinFormat,
     variant: ModelVariant,
@@ -137,6 +142,7 @@ pub fn player_debug_bounds_for_style(
     meshes_debug_bounds(meshes.iter())
 }
 
+#[cfg(any(debug_assertions, test))]
 pub fn player_part_debug_bounds_for_style(
     format: SkinFormat,
     variant: ModelVariant,
@@ -172,6 +178,7 @@ pub fn meshes_debug_bounds<'a>(meshes: impl Iterator<Item = &'a Mesh>) -> MeshDe
     bounds_from_min_max(min, max)
 }
 
+#[cfg(any(debug_assertions, test))]
 pub fn meshes_part_debug_bounds<'a>(
     meshes: impl Iterator<Item = &'a Mesh>,
 ) -> Vec<MeshPartDebugBounds> {

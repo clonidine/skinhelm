@@ -70,6 +70,7 @@ impl ViewerPreset {
     }
 }
 
+#[cfg(any(debug_assertions, test))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ProjectedBoundsMetrics {
     pub min_x_px: f32,
@@ -221,6 +222,7 @@ pub fn presentation_matrix(preset: ViewerPreset, bounds: MeshDebugBounds) -> Mat
     Mat4::identity()
 }
 
+#[cfg(any(debug_assertions, test))]
 pub fn projected_bounds_metrics(
     bounds: MeshDebugBounds,
     presentation: Mat4,
@@ -267,6 +269,7 @@ pub fn projected_bounds_metrics(
 }
 
 #[inline]
+#[cfg(any(debug_assertions, test))]
 fn bounds_corners(bounds: MeshDebugBounds) -> [Vec3; 8] {
     [
         Vec3::new(bounds.min.x, bounds.min.y, bounds.min.z),
@@ -281,6 +284,7 @@ fn bounds_corners(bounds: MeshDebugBounds) -> [Vec3; 8] {
 }
 
 #[inline]
+#[cfg(any(debug_assertions, test))]
 pub fn debug_head_front_view_matrix() -> Mat4 {
     Mat4::look_at(
         Vec3::new(0.0, 28.0, 64.0),
@@ -290,6 +294,7 @@ pub fn debug_head_front_view_matrix() -> Mat4 {
 }
 
 #[inline]
+#[cfg(any(debug_assertions, test))]
 pub fn debug_head_front_view_matrix_for_preset(preset: ViewerPreset) -> Mat4 {
     let _ = preset;
     debug_head_front_view_matrix()

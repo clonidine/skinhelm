@@ -20,7 +20,6 @@ Main capabilities:
 - `NEAREST` texture filtering and `CLAMP_TO_EDGE` wrapping for pixel-art skins.
 - Mouse orbit controls and wheel zoom.
 - Experimental walking animation, disabled by default, with speed control.
-- Query-string debug modes for inspecting the head, overlays, full model, and lighting.
 
 ## Workspace Relationship
 
@@ -92,7 +91,6 @@ Important exported methods:
 - `set_animation_enabled(enabled)`: enables or disables experimental animation.
 - `set_overlays_enabled(enabled)`: shows or hides outer layers.
 - `set_animation_speed(speed)`: adjusts animation speed, clamped internally to `0.1..=3.0`.
-- `set_debug_mode(mode)`: enables a named debug rendering mode.
 - `set_preset(preset)`: applies the camera preset; currently unknown values resolve to `default`.
 - `resize()`: synchronizes canvas pixel size with CSS size and `devicePixelRatio`.
 - `render_frame(timestamp_ms)`: renders one frame and advances animation time.
@@ -153,10 +151,10 @@ npm run dev
 - `src/skin.rs`: PNG decoding, dimension validation, and generated default skin.
 - `src/animation.rs`: static pose, walking pose, and cape rotation helpers.
 - `src/cape.rs`: pure loaded/visible cape state.
-- `src/controls.rs`: camera, orbit controls, zoom, projection, and debug metrics.
+- `src/controls.rs`: camera, orbit controls, zoom, and projection helpers.
 - `src/math.rs`: small vector and matrix helpers used by the renderer.
 - `src/error.rs`: viewer errors converted into JavaScript-facing messages.
-- `bootstrap.js`: high-level JavaScript glue for UI events and UUID loading.
+- `bootstrap.js`: release JavaScript glue for UI events and UUID loading.
 - `index.html`: viewer interface used by Vite and the backend.
 - `pkg/`: `wasm-pack` output; embedded by the backend when `wasm-viewer` is enabled.
 - `dist/`: `npm run build` output.
@@ -176,21 +174,6 @@ The interface in `index.html` uses these IDs, consumed by `bootstrap.js`:
 - `dock-toggle`: shows or hides the control dock.
 - Mouse drag on the canvas: orbits the camera.
 - Mouse wheel on the canvas: zooms in or out.
-
-## Debug Modes
-
-Add `debug` to the query string to force rendering modes:
-
-```text
-?debug=solid-head
-?debug=head
-?debug=head-textured
-?debug=head-overlay
-?debug=base-only
-?debug=full-no-overlays
-?debug=full-overlays
-?debug=unlit
-```
 
 The `preset` mode exists in the API and URL, but currently all values resolve to `default`:
 

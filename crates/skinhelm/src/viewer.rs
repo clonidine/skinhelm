@@ -3,6 +3,9 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, LOCATION};
 use axum::http::{HeaderValue, Response, StatusCode};
 
 const VIEWER_INDEX: &str = include_str!("../../skinhelm-wasm/index.html");
+#[cfg(debug_assertions)]
+const VIEWER_BOOTSTRAP: &str = include_str!("../../skinhelm-wasm/bootstrap.debug.js");
+#[cfg(not(debug_assertions))]
 const VIEWER_BOOTSTRAP: &str = include_str!("../../skinhelm-wasm/bootstrap.js");
 const VIEWER_WASM_JS: &str = include_str!("../../skinhelm-wasm/pkg/skinhelm_wasm.js");
 const VIEWER_WASM: &[u8] = include_bytes!("../../skinhelm-wasm/pkg/skinhelm_wasm_bg.wasm");

@@ -10,9 +10,11 @@ use crate::controls::{LightMode, ViewerPreset};
 use crate::error::ViewerError;
 use crate::math::{Mat4, Vec3};
 use crate::model::{
-    build_player_meshes_for_style, meshes_debug_bounds, meshes_part_debug_bounds,
-    part_model_matrix, BodyPart, MeshDebugBounds, MeshPartDebugBounds, PlayerModelStyle,
+    build_player_meshes_for_style, meshes_debug_bounds, part_model_matrix, BodyPart,
+    MeshDebugBounds, PlayerModelStyle,
 };
+#[cfg(debug_assertions)]
+use crate::model::{meshes_part_debug_bounds, MeshPartDebugBounds};
 use crate::skin::{ModelVariant, SkinFormat, SkinImage};
 
 const VERTEX_SHADER: &str = r#"#version 300 es
@@ -32,6 +34,7 @@ void main() {
 }
 "#;
 
+#[cfg(debug_assertions)]
 const FRAGMENT_SHADER: &str = r#"#version 300 es
 precision mediump float;
 uniform sampler2D u_texture;
@@ -62,6 +65,32 @@ void main() {
 }
 "#;
 
+#[cfg(not(debug_assertions))]
+const FRAGMENT_SHADER: &str = r#"#version 300 es
+precision mediump float;
+uniform sampler2D u_texture;
+uniform bool u_force_opaque;
+uniform float u_ambient;
+uniform float u_directional;
+uniform vec3 u_light_dir;
+in vec2 v_uv;
+in vec3 v_normal;
+out vec4 out_color;
+
+void main() {
+    vec4 color = texture(u_texture, v_uv);
+    if (!u_force_opaque && color.a <= 0.00001) {
+        discard;
+    }
+    if (u_force_opaque) {
+        color.a = 1.0;
+    }
+    float light = u_ambient + max(dot(normalize(v_normal), normalize(u_light_dir)), 0.0) * u_directional;
+    color.rgb *= light;
+    out_color = color;
+}
+"#;
+
 pub struct Renderer {
     gl: Gl,
     canvas: HtmlCanvasElement,
@@ -69,11 +98,14 @@ pub struct Renderer {
     mvp_uniform: WebGlUniformLocation,
     model_uniform: WebGlUniformLocation,
     force_opaque_uniform: WebGlUniformLocation,
+    #[cfg(debug_assertions)]
     debug_solid_uniform: WebGlUniformLocation,
+    #[cfg(debug_assertions)]
     unlit_uniform: WebGlUniformLocation,
     ambient_uniform: WebGlUniformLocation,
     directional_uniform: WebGlUniformLocation,
     light_dir_uniform: WebGlUniformLocation,
+    #[cfg(debug_assertions)]
     debug_color_uniform: WebGlUniformLocation,
     position_attrib: u32,
     uv_attrib: u32,
@@ -82,6 +114,7 @@ pub struct Renderer {
     cape_texture: Option<WebGlTexture>,
     meshes: Vec<RenderMesh>,
     model_bounds: Option<MeshDebugBounds>,
+    #[cfg(debug_assertions)]
     model_part_bounds: Vec<MeshPartDebugBounds>,
     cape_mesh: Option<RenderMesh>,
     model_preset: ViewerPreset,
@@ -124,9 +157,11 @@ impl Renderer {
         let force_opaque_uniform = gl.get_uniform_location(&program, "u_force_opaque").ok_or(
             ViewerError::WebGlOperation("missing u_force_opaque uniform"),
         )?;
+        #[cfg(debug_assertions)]
         let debug_solid_uniform = gl
             .get_uniform_location(&program, "u_debug_solid")
             .ok_or(ViewerError::WebGlOperation("missing u_debug_solid uniform"))?;
+        #[cfg(debug_assertions)]
         let unlit_uniform = gl
             .get_uniform_location(&program, "u_unlit")
             .ok_or(ViewerError::WebGlOperation("missing u_unlit uniform"))?;
@@ -139,6 +174,7 @@ impl Renderer {
         let light_dir_uniform = gl
             .get_uniform_location(&program, "u_light_dir")
             .ok_or(ViewerError::WebGlOperation("missing u_light_dir uniform"))?;
+        #[cfg(debug_assertions)]
         let debug_color_uniform = gl
             .get_uniform_location(&program, "u_debug_color")
             .ok_or(ViewerError::WebGlOperation("missing u_debug_color uniform"))?;
@@ -167,11 +203,14 @@ impl Renderer {
             mvp_uniform,
             model_uniform,
             force_opaque_uniform,
+            #[cfg(debug_assertions)]
             debug_solid_uniform,
+            #[cfg(debug_assertions)]
             unlit_uniform,
             ambient_uniform,
             directional_uniform,
             light_dir_uniform,
+            #[cfg(debug_assertions)]
             debug_color_uniform,
             position_attrib: position_location as u32,
             uv_attrib: uv_location as u32,
@@ -180,6 +219,7 @@ impl Renderer {
             cape_texture: None,
             meshes: Vec::new(),
             model_bounds: None,
+            #[cfg(debug_assertions)]
             model_part_bounds: Vec::new(),
             cape_mesh: None,
             model_preset: ViewerPreset::Default,
@@ -252,7 +292,7 @@ impl Renderer {
         pose: WalkPose,
         overlays_enabled: bool,
         cape_visible: bool,
-        unlit: bool,
+        #[cfg_attr(not(debug_assertions), allow(unused_variables))] unlit: bool,
         preset: ViewerPreset,
         presentation: Mat4,
         light_dir: Vec3,
@@ -263,7 +303,9 @@ impl Renderer {
         self.gl.active_texture(Gl::TEXTURE0);
         self.gl.bind_texture(Gl::TEXTURE_2D, self.texture.as_ref());
 
+        #[cfg(debug_assertions)]
         self.set_debug_solid(false);
+        #[cfg(debug_assertions)]
         self.set_unlit(unlit);
         self.gl.disable(Gl::CULL_FACE);
         self.gl.disable(Gl::BLEND);
@@ -317,6 +359,7 @@ impl Renderer {
         Ok(())
     }
 
+    #[cfg(debug_assertions)]
     pub fn render_head_debug(
         &self,
         view: Mat4,
@@ -378,7 +421,7 @@ impl Renderer {
         self.meshes.clear();
         let meshes = build_player_meshes_for_style(format, variant, model_style(self.model_preset));
         self.model_bounds = Some(meshes_debug_bounds(meshes.iter()));
-        self.model_part_bounds = meshes_part_debug_bounds(meshes.iter());
+        self.rebuild_model_part_bounds(&meshes);
         for mesh in meshes {
             let render_mesh = self.create_render_mesh(mesh)?;
             self.meshes.push(render_mesh);
@@ -386,10 +429,19 @@ impl Renderer {
         Ok(())
     }
 
+    #[cfg(debug_assertions)]
+    fn rebuild_model_part_bounds(&mut self, meshes: &[crate::model::Mesh]) {
+        self.model_part_bounds = meshes_part_debug_bounds(meshes.iter());
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn rebuild_model_part_bounds(&mut self, _meshes: &[crate::model::Mesh]) {}
+
     pub fn model_bounds(&self) -> Option<MeshDebugBounds> {
         self.model_bounds
     }
 
+    #[cfg(debug_assertions)]
     #[inline]
     pub fn model_part_bounds(&self) -> &[MeshPartDebugBounds] {
         &self.model_part_bounds
@@ -447,6 +499,7 @@ impl Renderer {
     }
 
     #[inline]
+    #[cfg(debug_assertions)]
     fn set_debug_solid(&self, enabled: bool) {
         self.gl
             .uniform1i(Some(&self.debug_solid_uniform), i32::from(enabled));
@@ -455,6 +508,7 @@ impl Renderer {
     }
 
     #[inline]
+    #[cfg(debug_assertions)]
     fn set_unlit(&self, enabled: bool) {
         self.gl
             .uniform1i(Some(&self.unlit_uniform), i32::from(enabled));

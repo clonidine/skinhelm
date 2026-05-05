@@ -131,24 +131,6 @@ export class SkinhelmViewer {
         }
     }
     /**
-     * @param {string} mode
-     * @returns {string}
-     */
-    set_debug_mode(mode) {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const ptr0 = passStringToWasm0(mode, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-            const len0 = WASM_VECTOR_LEN;
-            const ret = wasm.skinhelmviewer_set_debug_mode(this.__wbg_ptr, ptr0, len0);
-            deferred2_0 = ret[0];
-            deferred2_1 = ret[1];
-            return getStringFromWasm0(ret[0], ret[1]);
-        } finally {
-            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-        }
-    }
-    /**
      * @param {boolean} enabled
      */
     set_overlays_enabled(enabled) {
@@ -425,9 +407,6 @@ function __wbg_get_imports() {
         },
         __wbg_uniform3f_f86fd2da1814a8f0: function(arg0, arg1, arg2, arg3, arg4) {
             arg0.uniform3f(arg1, arg2, arg3, arg4);
-        },
-        __wbg_uniform4f_4fa9b0e1d5e37cc8: function(arg0, arg1, arg2, arg3, arg4, arg5) {
-            arg0.uniform4f(arg1, arg2, arg3, arg4, arg5);
         },
         __wbg_uniformMatrix4fv_174a0c07d7d262e6: function(arg0, arg1, arg2, arg3, arg4) {
             arg0.uniformMatrix4fv(arg1, arg2 !== 0, getArrayF32FromWasm0(arg3, arg4));

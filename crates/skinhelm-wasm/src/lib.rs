@@ -69,6 +69,7 @@ impl SkinhelmViewer {
         self.app.set_animation_speed(speed);
     }
 
+    #[cfg(debug_assertions)]
     pub fn set_debug_mode(&mut self, mode: &str) -> String {
         self.app.set_debug_mode(mode)
     }

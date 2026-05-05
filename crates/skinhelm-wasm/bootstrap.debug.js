@@ -21,6 +21,22 @@ new MutationObserver(() => {
   status.title = status.textContent || "";
 }).observe(status, { childList: true, characterData: true, subtree: true });
 
+const DEBUG_MODES = new Set([
+  "solid-head",
+  "head",
+  "head-textured",
+  "head-overlay",
+  "base-only",
+  "full-no-overlays",
+  "full-overlays",
+  "unlit",
+]);
+
+function requestedDebugMode() {
+  const debug = new URLSearchParams(window.location.search).get("debug") || "";
+  return DEBUG_MODES.has(debug) ? debug : "";
+}
+
 function requestedPreset() {
   return "default";
 }
@@ -115,6 +131,16 @@ async function main() {
     setDockOpen(document.documentElement.dataset.dock !== "open");
   });
 
+  const debugMode = requestedDebugMode();
+  if (debugMode && typeof viewer.set_debug_mode === "function") {
+    const debugStatus = viewer.set_debug_mode(debugMode);
+    const overlaysVisible = debugMode === "head-overlay" || debugMode === "full-overlays" || debugMode === "unlit";
+    toggleOverlays.checked = overlaysVisible;
+    viewer.set_overlays_enabled(overlaysVisible);
+    toggleAnimation.checked = false;
+    syncAnimationControls(viewer);
+    setStatus(debugStatus);
+  }
   let pointerActive = false;
   let pendingPointerMove = null;
   const initialUuid = skinUuidFromPath();

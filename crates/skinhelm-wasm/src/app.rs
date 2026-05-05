@@ -4,16 +4,17 @@ use web_sys::{HtmlCanvasElement, HtmlElement};
 
 use crate::animation::{cape_reactive_walk_pose, static_pose, walk_pose};
 use crate::cape::CapeRenderState;
-use crate::controls::{
-    debug_head_front_view_matrix_for_preset, presentation_matrix, profile_projection,
-    projected_bounds_metrics, OrbitControls, ViewerPreset,
-};
+#[cfg(debug_assertions)]
+use crate::controls::{debug_head_front_view_matrix_for_preset, projected_bounds_metrics};
+use crate::controls::{presentation_matrix, profile_projection, OrbitControls, ViewerPreset};
 use crate::error::ViewerError;
 use crate::math::Mat4;
+#[cfg(debug_assertions)]
 use crate::model::{BodyPart, MeshPartDebugBounds};
 use crate::skin::{decode_cape_png, decode_png, default_skin, ModelVariant};
 use crate::webgl::Renderer;
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DebugMode {
     None,
@@ -36,6 +37,7 @@ pub struct ViewerApp {
     elapsed_seconds: f32,
     last_timestamp_ms: Option<f64>,
     cape: CapeRenderState,
+    #[cfg(debug_assertions)]
     debug_mode: DebugMode,
     viewer_preset: ViewerPreset,
 }
@@ -71,6 +73,7 @@ impl ViewerApp {
             elapsed_seconds: 0.0,
             last_timestamp_ms: None,
             cape: CapeRenderState::new(),
+            #[cfg(debug_assertions)]
             debug_mode: DebugMode::None,
             viewer_preset: ViewerPreset::Default,
         };
@@ -152,6 +155,7 @@ impl ViewerApp {
         self.animation_speed = speed.clamp(0.1, 3.0);
     }
 
+    #[cfg(debug_assertions)]
     pub fn set_debug_mode(&mut self, mode: &str) -> String {
         self.debug_mode = DebugMode::from_query_value(mode);
         let label = self.debug_mode.status_label();
@@ -187,9 +191,8 @@ impl ViewerApp {
         }
         self.last_timestamp_ms = Some(timestamp_ms);
 
-        let debug_active = !matches!(self.debug_mode, DebugMode::None);
         let phase = self.elapsed_seconds * self.animation_speed * 4.0;
-        let pose = if self.animation_enabled && !debug_active {
+        let pose = if self.animation_enabled && !self.debug_active() {
             if self.cape.should_render() {
                 cape_reactive_walk_pose(phase)
             } else {
@@ -207,6 +210,7 @@ impl ViewerApp {
             .map(|bounds| presentation_matrix(self.viewer_preset, bounds))
             .unwrap_or_else(Mat4::identity);
         let light_dir = self.controls.camera_light_direction();
+        #[cfg(debug_assertions)]
         match self.debug_mode {
             DebugMode::None => {}
             DebugMode::SolidHead => {
@@ -315,7 +319,8 @@ impl ViewerApp {
                 light_dir,
             )
             .map_err(to_js_error);
-        if result.is_ok() && debug_active {
+        #[cfg(debug_assertions)]
+        if result.is_ok() && self.debug_active() {
             if let Some(bounds) = bounds {
                 if self.viewer_preset.uses_skinview3d_hierarchy() {
                     self.set_status(&self.skinview3d_world_debug_status(bounds));
@@ -332,6 +337,18 @@ impl ViewerApp {
             }
         }
         result
+    }
+
+    #[inline]
+    fn debug_active(&self) -> bool {
+        #[cfg(debug_assertions)]
+        {
+            !matches!(self.debug_mode, DebugMode::None)
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            false
+        }
     }
 
     pub fn pointer_down(&mut self, x: f32, y: f32) {
@@ -361,6 +378,7 @@ impl ViewerApp {
         ));
     }
 
+    #[cfg(debug_assertions)]
     fn metrics_status(
         &self,
         bounds: crate::model::MeshDebugBounds,
@@ -394,6 +412,7 @@ impl ViewerApp {
         )
     }
 
+    #[cfg(debug_assertions)]
     fn skinview3d_world_debug_status(&self, bounds: crate::model::MeshDebugBounds) -> String {
         let mut parts = self
             .renderer
@@ -421,6 +440,7 @@ impl ViewerApp {
     }
 }
 
+#[cfg(debug_assertions)]
 impl DebugMode {
     fn from_query_value(value: &str) -> Self {
         match value {
@@ -449,6 +469,7 @@ impl DebugMode {
     }
 }
 
+#[cfg(debug_assertions)]
 fn format_part_bounds(part: &MeshPartDebugBounds) -> String {
     let label = part_label(part.part, part.overlay);
     let bounds = part.bounds;
@@ -467,6 +488,7 @@ fn format_part_bounds(part: &MeshPartDebugBounds) -> String {
     )
 }
 
+#[cfg(debug_assertions)]
 fn part_label(part: BodyPart, overlay: bool) -> &'static str {
     match (part, overlay) {
         (BodyPart::Head, false) => "head",
