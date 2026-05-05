@@ -141,8 +141,12 @@ impl Renderer {
             .map_err(|_| ViewerError::WebGlUnavailable)?;
 
         let vertex_shader = compile_shader(&gl, Gl::VERTEX_SHADER, VERTEX_SHADER)?;
-        let fragment_shader = compile_shader(&gl, Gl::FRAGMENT_SHADER, FRAGMENT_SHADER)?;
-        let program = link_program(&gl, &vertex_shader, &fragment_shader)?;
+        let fragment_shader = compile_shader(&gl, Gl::FRAGMENT_SHADER, FRAGMENT_SHADER)
+            .inspect_err(|_| gl.delete_shader(Some(&vertex_shader)))?;
+        let program = link_program(&gl, &vertex_shader, &fragment_shader).inspect_err(|_| {
+            gl.delete_shader(Some(&vertex_shader));
+            gl.delete_shader(Some(&fragment_shader));
+        })?;
         gl.delete_shader(Some(&vertex_shader));
         gl.delete_shader(Some(&fragment_shader));
         gl.use_program(Some(&program));
@@ -705,6 +709,7 @@ fn compile_shader(gl: &Gl, shader_type: u32, source: &str) -> Result<WebGlShader
         .ok_or_else(|| ViewerError::ShaderCompile("create shader returned null".to_owned()))?;
     gl.shader_source(&shader, source);
     gl.compile_shader(&shader);
+
     if gl
         .get_shader_parameter(&shader, Gl::COMPILE_STATUS)
         .as_bool()
@@ -712,10 +717,11 @@ fn compile_shader(gl: &Gl, shader_type: u32, source: &str) -> Result<WebGlShader
     {
         Ok(shader)
     } else {
-        Err(ViewerError::ShaderCompile(
-            gl.get_shader_info_log(&shader)
-                .unwrap_or_else(|| "unknown shader error".to_owned()),
-        ))
+        let info = gl
+            .get_shader_info_log(&shader)
+            .unwrap_or_else(|| "unknown shader error".to_owned());
+        gl.delete_shader(Some(&shader));
+        Err(ViewerError::ShaderCompile(info))
     }
 }
 
@@ -730,6 +736,7 @@ fn link_program(
     gl.attach_shader(&program, vertex_shader);
     gl.attach_shader(&program, fragment_shader);
     gl.link_program(&program);
+
     if gl
         .get_program_parameter(&program, Gl::LINK_STATUS)
         .as_bool()
@@ -737,9 +744,10 @@ fn link_program(
     {
         Ok(program)
     } else {
-        Err(ViewerError::ProgramLink(
-            gl.get_program_info_log(&program)
-                .unwrap_or_else(|| "unknown program link error".to_owned()),
-        ))
+        let info = gl
+            .get_program_info_log(&program)
+            .unwrap_or_else(|| "unknown program link error".to_owned());
+        gl.delete_program(Some(&program));
+        Err(ViewerError::ProgramLink(info))
     }
 }
