@@ -147,29 +147,6 @@
         font-weight: 600;
       }
 
-      .status-badge {
-        display: block;
-        justify-self: end;
-        min-width: 0;
-        min-height: 32px;
-        max-width: min(calc(100vw - 230px), 760px);
-        padding: 8px 12px 7px;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.045);
-        color: var(--text-muted);
-        box-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
-        font-size: 0.73rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        line-height: 1.1;
-        text-overflow: ellipsis;
-        text-transform: uppercase;
-        white-space: nowrap;
-        backdrop-filter: blur(18px);
-      }
-
       .viewer-stage {
         position: relative;
         min-height: 100dvh;
@@ -445,12 +422,6 @@
           display: none;
         }
 
-        .status-badge {
-          max-width: calc(100vw - 190px);
-          padding-top: 7px;
-          font-size: 0.66rem;
-        }
-
         .control-pill {
           justify-content: stretch;
           border-radius: 28px;
@@ -485,7 +456,7 @@
             <span>WebGL viewer</span>
           </div>
         </div>
-        <span id="status" class="status-badge">Starting viewer...</span>
+        <span id="status" hidden aria-hidden="true">Starting viewer...</span>
       </header>
 
       <main class="viewer-stage">
