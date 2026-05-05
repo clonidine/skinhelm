@@ -158,7 +158,7 @@ impl Renderer {
 
         gl.enable(Gl::DEPTH_TEST);
         gl.blend_func(Gl::SRC_ALPHA, Gl::ONE_MINUS_SRC_ALPHA);
-        gl.clear_color(0.035, 0.04, 0.05, 1.0);
+        gl.clear_color(0.055, 0.06, 0.075, 1.0);
 
         Ok(Self {
             gl,
@@ -459,7 +459,7 @@ impl Renderer {
 
     fn set_viewer_preset(&self, preset: ViewerPreset, camera_light_dir: Vec3) {
         let (clear, ambient, directional, light_dir) = match preset.light_mode() {
-            LightMode::Default => ([0.035, 0.04, 0.05, 1.0], 0.70, 0.35, camera_light_dir),
+            LightMode::Default => ([0.055, 0.06, 0.075, 1.0], 0.70, 0.35, camera_light_dir),
         };
 
         self.gl.clear_color(clear[0], clear[1], clear[2], clear[3]);
