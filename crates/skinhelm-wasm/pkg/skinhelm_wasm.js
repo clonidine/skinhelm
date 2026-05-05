@@ -189,6 +189,9 @@ function __wbg_get_imports() {
         __wbg_bindTexture_f6ae9f2a0b12117c: function(arg0, arg1, arg2) {
             arg0.bindTexture(arg1 >>> 0, arg2);
         },
+        __wbg_bindVertexArray_7dd4cc73efaa5b02: function(arg0, arg1) {
+            arg0.bindVertexArray(arg1);
+        },
         __wbg_blendFunc_0836984f8f914802: function(arg0, arg1, arg2) {
             arg0.blendFunc(arg1 >>> 0, arg2 >>> 0);
         },
@@ -226,6 +229,10 @@ function __wbg_get_imports() {
         },
         __wbg_createTexture_fa18817b4d49b838: function(arg0) {
             const ret = arg0.createTexture();
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        },
+        __wbg_createVertexArray_565bc081065d93bc: function(arg0) {
+            const ret = arg0.createVertexArray();
             return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
         },
         __wbg_depthMask_c3c5be00f8a01171: function(arg0, arg1) {

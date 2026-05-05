@@ -2,7 +2,7 @@ use js_sys::Float32Array;
 use wasm_bindgen::JsCast;
 use web_sys::{
     HtmlCanvasElement, WebGl2RenderingContext as Gl, WebGlBuffer, WebGlProgram, WebGlShader,
-    WebGlTexture, WebGlUniformLocation,
+    WebGlTexture, WebGlUniformLocation, WebGlVertexArrayObject,
 };
 
 use crate::animation::WalkPose;
@@ -123,6 +123,8 @@ pub struct Renderer {
 }
 
 struct RenderMesh {
+    vao: WebGlVertexArrayObject,
+    #[allow(dead_code)]
     buffer: WebGlBuffer,
     vertex_count: i32,
     part: BodyPart,
@@ -484,12 +486,50 @@ impl Renderer {
     }
 
     fn create_render_mesh(&self, mesh: crate::model::Mesh) -> Result<RenderMesh, ViewerError> {
+        let vao = self
+            .gl
+            .create_vertex_array()
+            .ok_or(ViewerError::WebGlOperation("create vertex array"))?;
         let buffer = self.gl.create_buffer().ok_or(ViewerError::BufferCreation)?;
+        let stride = crate::model::VERTEX_STRIDE as i32 * std::mem::size_of::<f32>() as i32;
+        let f32_size = std::mem::size_of::<f32>() as i32;
+
+        self.gl.bind_vertex_array(Some(&vao));
         self.gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&buffer));
         let data = Float32Array::from(mesh.vertices.as_slice());
         self.gl
             .buffer_data_with_array_buffer_view(Gl::ARRAY_BUFFER, &data, Gl::STATIC_DRAW);
+        self.gl.enable_vertex_attrib_array(self.position_attrib);
+        self.gl.vertex_attrib_pointer_with_i32(
+            self.position_attrib,
+            3,
+            Gl::FLOAT,
+            false,
+            stride,
+            0,
+        );
+        self.gl.enable_vertex_attrib_array(self.uv_attrib);
+        self.gl.vertex_attrib_pointer_with_i32(
+            self.uv_attrib,
+            2,
+            Gl::FLOAT,
+            false,
+            stride,
+            3 * f32_size,
+        );
+        self.gl.enable_vertex_attrib_array(self.normal_attrib);
+        self.gl.vertex_attrib_pointer_with_i32(
+            self.normal_attrib,
+            3,
+            Gl::FLOAT,
+            false,
+            stride,
+            5 * f32_size,
+        );
+        self.gl.bind_vertex_array(None);
+
         Ok(RenderMesh {
+            vao,
             buffer,
             vertex_count: mesh.vertex_count,
             part: mesh.part,
@@ -540,36 +580,7 @@ impl Renderer {
         presentation: Mat4,
         pose: WalkPose,
     ) -> Result<(), ViewerError> {
-        self.gl.bind_buffer(Gl::ARRAY_BUFFER, Some(&mesh.buffer));
-        let stride = crate::model::VERTEX_STRIDE as i32 * std::mem::size_of::<f32>() as i32;
-        self.gl.enable_vertex_attrib_array(self.position_attrib);
-        self.gl.vertex_attrib_pointer_with_i32(
-            self.position_attrib,
-            3,
-            Gl::FLOAT,
-            false,
-            stride,
-            0,
-        );
-        self.gl.enable_vertex_attrib_array(self.uv_attrib);
-        self.gl.vertex_attrib_pointer_with_i32(
-            self.uv_attrib,
-            2,
-            Gl::FLOAT,
-            false,
-            stride,
-            3 * std::mem::size_of::<f32>() as i32,
-        );
-        self.gl.enable_vertex_attrib_array(self.normal_attrib);
-        self.gl.vertex_attrib_pointer_with_i32(
-            self.normal_attrib,
-            3,
-            Gl::FLOAT,
-            false,
-            stride,
-            5 * std::mem::size_of::<f32>() as i32,
-        );
-
+        self.gl.bind_vertex_array(Some(&mesh.vao));
         let model = presentation.multiply(part_model_matrix(mesh.part, mesh.pivot, pose));
         let mvp = projection.multiply(view).multiply(model);
         self.gl
@@ -577,6 +588,7 @@ impl Renderer {
         self.gl
             .uniform_matrix4fv_with_f32_array(Some(&self.mvp_uniform), false, &mvp.m);
         self.gl.draw_arrays(Gl::TRIANGLES, 0, mesh.vertex_count);
+        self.gl.bind_vertex_array(None);
         Ok(())
     }
 }
