@@ -1,1 +1,7 @@
 /target
+/pkg
+/node_modules
+/dist
+**/pkg
+**/node_modules
+**/dist

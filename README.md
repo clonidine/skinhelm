@@ -25,6 +25,7 @@
 
 - `crates/skinhelm`: HTTP server, Axum routes, application state, logging setup, and graceful shutdown.
 - `crates/skinhelm-core`: Mojang client, validation, cache, PNG rendering, shared types, and domain errors.
+- `crates/skinhelm-wasm`: WebAssembly/WebGL browser viewer for complete 3D Minecraft skins.
 
 ## Run Locally
 

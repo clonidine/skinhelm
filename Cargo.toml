@@ -2,6 +2,7 @@
 members = [
     "crates/skinhelm",
     "crates/skinhelm-core",
+    "crates/skinhelm-wasm",
 ]
 
 resolver = "2"
