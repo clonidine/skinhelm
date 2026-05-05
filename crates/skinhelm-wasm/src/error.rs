@@ -6,6 +6,11 @@ pub enum ViewerError {
     ProgramLink(String),
     BufferCreation,
     TextureCreation,
+    InvalidTextureData {
+        width: u32,
+        height: u32,
+        actual_len: usize,
+    },
     InvalidPng,
     InvalidCapePng,
     UnsupportedSkinDimensions(u32, u32),
@@ -22,6 +27,11 @@ impl ViewerError {
             Self::ProgramLink(message) => format!("program link failed: {message}"),
             Self::BufferCreation => "failed to create WebGL buffer".to_owned(),
             Self::TextureCreation => "failed to create WebGL texture".to_owned(),
+            Self::InvalidTextureData {
+                width,
+                height,
+                actual_len,
+            } => format!("invalid texture data size for {width}x{height}: {actual_len} bytes"),
             Self::InvalidPng => "invalid PNG skin".to_owned(),
             Self::InvalidCapePng => "invalid PNG cape".to_owned(),
             Self::UnsupportedSkinDimensions(width, height) => {

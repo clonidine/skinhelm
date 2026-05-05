@@ -124,7 +124,6 @@ pub struct Renderer {
 
 struct RenderMesh {
     vao: WebGlVertexArrayObject,
-    #[allow(dead_code)]
     buffer: WebGlBuffer,
     vertex_count: i32,
     part: BodyPart,
@@ -253,10 +252,13 @@ impl Renderer {
 
     pub fn upload_skin(&mut self, skin: &SkinImage) -> Result<(), ViewerError> {
         let texture = self.upload_texture(skin.width, skin.height, &skin.rgba)?;
-        self.texture = Some(texture);
+        if let Err(error) = self.rebuild_model(skin) {
+            self.gl.delete_texture(Some(&texture));
+            return Err(error);
+        }
+        self.replace_skin_texture(texture);
         self.skin_format = Some(skin.format);
         self.model_variant = Some(skin.model);
-        self.rebuild_model(skin)?;
         Ok(())
     }
 
@@ -277,14 +279,20 @@ impl Renderer {
     pub fn upload_cape(&mut self, cape: &crate::skin::CapeImage) -> Result<(), ViewerError> {
         let texture = self.upload_texture(cape.width, cape.height, &cape.rgba)?;
         let mesh = crate::model::build_cape_mesh(cape.width as f32, cape.height as f32);
-        self.cape_texture = Some(texture);
-        self.cape_mesh = Some(self.create_render_mesh(mesh)?);
+        let render_mesh = match self.create_render_mesh(mesh) {
+            Ok(render_mesh) => render_mesh,
+            Err(error) => {
+                self.gl.delete_texture(Some(&texture));
+                return Err(error);
+            }
+        };
+        self.replace_cape_texture(texture);
+        self.replace_cape_mesh(render_mesh);
         Ok(())
     }
 
     pub fn clear_cape(&mut self) {
-        self.cape_texture = None;
-        self.cape_mesh = None;
+        self.clear_cape_resources();
     }
 
     pub fn render(
@@ -314,24 +322,22 @@ impl Renderer {
         self.gl.depth_mask(true);
         self.gl
             .uniform1i(Some(&self.force_opaque_uniform), i32::from(true));
-        self.gl.bind_texture(Gl::TEXTURE_2D, self.texture.as_ref());
         for mesh in &self.meshes {
             if mesh.overlay {
                 continue;
             }
-            self.draw_mesh(mesh, view, projection, presentation, pose)?;
+            self.draw_mesh(mesh, view, projection, presentation, pose);
         }
         if cape_visible {
             self.gl
                 .uniform1i(Some(&self.force_opaque_uniform), i32::from(false));
-            self.gl.disable(Gl::BLEND);
             self.gl.depth_mask(true);
         }
         if let (true, Some(texture), Some(mesh)) =
             (cape_visible, &self.cape_texture, &self.cape_mesh)
         {
             self.gl.bind_texture(Gl::TEXTURE_2D, Some(texture));
-            self.draw_mesh(mesh, view, projection, presentation, pose)?;
+            self.draw_mesh(mesh, view, projection, presentation, pose);
         }
         if cape_visible {
             self.gl.depth_mask(true);
@@ -339,7 +345,6 @@ impl Renderer {
                 .uniform1i(Some(&self.force_opaque_uniform), i32::from(true));
         }
         if overlays_enabled {
-            self.gl.disable(Gl::CULL_FACE);
             self.gl.bind_texture(Gl::TEXTURE_2D, self.texture.as_ref());
             self.gl
                 .uniform1i(Some(&self.force_opaque_uniform), i32::from(false));
@@ -351,13 +356,12 @@ impl Renderer {
                 if !mesh.overlay {
                     continue;
                 }
-                self.draw_mesh(mesh, view, projection, presentation, pose)?;
+                self.draw_mesh(mesh, view, projection, presentation, pose);
             }
             self.gl.depth_mask(true);
             self.gl.disable(Gl::POLYGON_OFFSET_FILL);
             self.gl.disable(Gl::BLEND);
         }
-        self.gl.disable(Gl::CULL_FACE);
         Ok(())
     }
 
@@ -384,7 +388,7 @@ impl Renderer {
 
         for mesh in &self.meshes {
             if mesh.part == BodyPart::Head && !mesh.overlay {
-                self.draw_mesh(mesh, view, projection, Mat4::identity(), pose)?;
+                self.draw_mesh(mesh, view, projection, Mat4::identity(), pose);
             }
         }
 
@@ -398,7 +402,7 @@ impl Renderer {
             self.gl.depth_mask(false);
             for mesh in &self.meshes {
                 if mesh.part == BodyPart::Head && mesh.overlay {
-                    self.draw_mesh(mesh, view, projection, Mat4::identity(), pose)?;
+                    self.draw_mesh(mesh, view, projection, Mat4::identity(), pose);
                 }
             }
             self.gl.depth_mask(true);
@@ -420,24 +424,43 @@ impl Renderer {
         format: SkinFormat,
         variant: ModelVariant,
     ) -> Result<(), ViewerError> {
-        self.meshes.clear();
         let meshes = build_player_meshes_for_style(format, variant, model_style(self.model_preset));
-        self.model_bounds = Some(meshes_debug_bounds(meshes.iter()));
-        self.rebuild_model_part_bounds(&meshes);
+        let model_bounds = Some(meshes_debug_bounds(meshes.iter()));
+        let model_part_bounds = self.rebuilt_model_part_bounds(&meshes);
+        let mut render_meshes = Vec::with_capacity(meshes.len());
         for mesh in meshes {
-            let render_mesh = self.create_render_mesh(mesh)?;
-            self.meshes.push(render_mesh);
+            match self.create_render_mesh(mesh) {
+                Ok(render_mesh) => render_meshes.push(render_mesh),
+                Err(error) => {
+                    for render_mesh in render_meshes {
+                        self.delete_render_mesh(render_mesh);
+                    }
+                    return Err(error);
+                }
+            }
         }
+        self.clear_meshes();
+        self.meshes = render_meshes;
+        self.model_bounds = model_bounds;
+        self.set_rebuilt_model_part_bounds(model_part_bounds);
         Ok(())
     }
 
     #[cfg(debug_assertions)]
-    fn rebuild_model_part_bounds(&mut self, meshes: &[crate::model::Mesh]) {
-        self.model_part_bounds = meshes_part_debug_bounds(meshes.iter());
+    fn rebuilt_model_part_bounds(&self, meshes: &[crate::model::Mesh]) -> Vec<MeshPartDebugBounds> {
+        meshes_part_debug_bounds(meshes.iter())
     }
 
     #[cfg(not(debug_assertions))]
-    fn rebuild_model_part_bounds(&mut self, _meshes: &[crate::model::Mesh]) {}
+    fn rebuilt_model_part_bounds(&self, _meshes: &[crate::model::Mesh]) {}
+
+    #[cfg(debug_assertions)]
+    fn set_rebuilt_model_part_bounds(&mut self, bounds: Vec<MeshPartDebugBounds>) {
+        self.model_part_bounds = bounds;
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn set_rebuilt_model_part_bounds(&mut self, _bounds: ()) {}
 
     pub fn model_bounds(&self) -> Option<MeshDebugBounds> {
         self.model_bounds
@@ -455,6 +478,23 @@ impl Renderer {
         height: u32,
         rgba: &[u8],
     ) -> Result<WebGlTexture, ViewerError> {
+        let expected_len = width
+            .checked_mul(height)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .and_then(|bytes| usize::try_from(bytes).ok())
+            .ok_or(ViewerError::InvalidTextureData {
+                width,
+                height,
+                actual_len: rgba.len(),
+            })?;
+        if rgba.len() != expected_len {
+            return Err(ViewerError::InvalidTextureData {
+                width,
+                height,
+                actual_len: rgba.len(),
+            });
+        }
+
         let texture = self
             .gl
             .create_texture()
@@ -490,7 +530,13 @@ impl Renderer {
             .gl
             .create_vertex_array()
             .ok_or(ViewerError::WebGlOperation("create vertex array"))?;
-        let buffer = self.gl.create_buffer().ok_or(ViewerError::BufferCreation)?;
+        let buffer = match self.gl.create_buffer() {
+            Some(buffer) => buffer,
+            None => {
+                self.gl.delete_vertex_array(Some(&vao));
+                return Err(ViewerError::BufferCreation);
+            }
+        };
         let stride = crate::model::VERTEX_STRIDE as i32 * std::mem::size_of::<f32>() as i32;
         let f32_size = std::mem::size_of::<f32>() as i32;
 
@@ -538,6 +584,45 @@ impl Renderer {
         })
     }
 
+    fn replace_skin_texture(&mut self, texture: WebGlTexture) {
+        if let Some(previous) = self.texture.replace(texture) {
+            self.gl.delete_texture(Some(&previous));
+        }
+    }
+
+    fn replace_cape_texture(&mut self, texture: WebGlTexture) {
+        if let Some(previous) = self.cape_texture.replace(texture) {
+            self.gl.delete_texture(Some(&previous));
+        }
+    }
+
+    fn replace_cape_mesh(&mut self, mesh: RenderMesh) {
+        if let Some(previous) = self.cape_mesh.replace(mesh) {
+            self.delete_render_mesh(previous);
+        }
+    }
+
+    fn clear_cape_resources(&mut self) {
+        if let Some(texture) = self.cape_texture.take() {
+            self.gl.delete_texture(Some(&texture));
+        }
+        if let Some(mesh) = self.cape_mesh.take() {
+            self.delete_render_mesh(mesh);
+        }
+    }
+
+    fn clear_meshes(&mut self) {
+        let meshes = std::mem::take(&mut self.meshes);
+        for mesh in meshes {
+            self.delete_render_mesh(mesh);
+        }
+    }
+
+    fn delete_render_mesh(&self, mesh: RenderMesh) {
+        self.gl.delete_vertex_array(Some(&mesh.vao));
+        self.gl.delete_buffer(Some(&mesh.buffer));
+    }
+
     #[inline]
     #[cfg(debug_assertions)]
     fn set_debug_solid(&self, enabled: bool) {
@@ -579,7 +664,7 @@ impl Renderer {
         projection: Mat4,
         presentation: Mat4,
         pose: WalkPose,
-    ) -> Result<(), ViewerError> {
+    ) {
         self.gl.bind_vertex_array(Some(&mesh.vao));
         let model = presentation.multiply(part_model_matrix(mesh.part, mesh.pivot, pose));
         let mvp = projection.multiply(view).multiply(model);
@@ -589,7 +674,17 @@ impl Renderer {
             .uniform_matrix4fv_with_f32_array(Some(&self.mvp_uniform), false, &mvp.m);
         self.gl.draw_arrays(Gl::TRIANGLES, 0, mesh.vertex_count);
         self.gl.bind_vertex_array(None);
-        Ok(())
+    }
+}
+
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        self.clear_cape_resources();
+        self.clear_meshes();
+        if let Some(texture) = self.texture.take() {
+            self.gl.delete_texture(Some(&texture));
+        }
+        self.gl.delete_program(Some(&self.program));
     }
 }
 
