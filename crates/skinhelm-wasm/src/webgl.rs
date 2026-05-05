@@ -143,6 +143,8 @@ impl Renderer {
         let vertex_shader = compile_shader(&gl, Gl::VERTEX_SHADER, VERTEX_SHADER)?;
         let fragment_shader = compile_shader(&gl, Gl::FRAGMENT_SHADER, FRAGMENT_SHADER)?;
         let program = link_program(&gl, &vertex_shader, &fragment_shader)?;
+        gl.delete_shader(Some(&vertex_shader));
+        gl.delete_shader(Some(&fragment_shader));
         gl.use_program(Some(&program));
 
         let mvp_uniform = gl
