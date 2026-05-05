@@ -186,7 +186,7 @@ left_arm_x = sin(phase) * 0.55
 cape_x = sin(phase / 1.5) * 0.06 + PI * 0.06
 ```
 
-Animation is experimental and disabled by default. The body gets a very subtle bob while walking, and the swing is intentionally conservative to reduce limb intersections. When animation is paused, the cape stays in its default rest angle. The pure cape helpers also include idle and running formulas for future viewer states:
+Animation is experimental and disabled by default. The body gets a very subtle bob while walking, and the swing is intentionally conservative to reduce limb intersections. When animation is paused, the cape hangs flat and rests just behind the back overlay so it reads as touching the player without intersecting the body. The pure cape helpers also include idle and running formulas for future viewer states:
 
 ```text
 idle cape_x = sin(t) * 0.01 + PI * 0.06

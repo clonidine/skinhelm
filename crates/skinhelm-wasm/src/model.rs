@@ -464,9 +464,9 @@ pub fn build_cape_mesh(cape_width: f32, cape_height: f32) -> Mesh {
     build_mesh(
         PartSpec {
             part: BodyPart::Cape,
-            center: Vec3::new(0.0, 16.0, -2.65),
+            center: Vec3::new(0.0, 16.0, -2.76),
             size: Vec3::new(10.0, 16.0, 1.0),
-            pivot: Vec3::new(0.0, 24.0, -2.2),
+            pivot: Vec3::new(0.0, 24.0, -2.25),
             uvs: FaceUvs {
                 top: UvRect::new(1.0, 0.0, 10.0, 1.0),
                 bottom: UvRect::new(11.0, 0.0, 10.0, 1.0),
@@ -1060,6 +1060,16 @@ mod tests {
 
         assert!((u - (1.5 / 64.0)).abs() < 0.0001);
         assert!((v - (16.5 / 32.0)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn cape_front_rests_just_behind_body_overlay() {
+        let cape = build_cape_mesh(64.0, 32.0);
+        let bounds = mesh_debug_bounds(&cape);
+
+        assert!((bounds.max.z - -2.26).abs() < 0.0001);
+        assert!(bounds.max.z < -2.25);
+        assert_vec3_close(cape.pivot, Vec3::new(0.0, 24.0, -2.25));
     }
 
     #[test]
