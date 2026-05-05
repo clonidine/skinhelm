@@ -2,6 +2,7 @@
 /pkg
 /node_modules
 /dist
+*.log
 **/pkg
 **/node_modules
 **/dist
