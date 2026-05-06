@@ -7,20 +7,40 @@ const loadPlayer = document.getElementById("load-player");
 const skinFile = document.getElementById("skin-file");
 const capeFile = document.getElementById("cape-file");
 const loadDefault = document.getElementById("load-default");
+const saveHead = document.getElementById("save-head");
 const toggleAnimation = document.getElementById("toggle-animation");
 const toggleOverlays = document.getElementById("toggle-overlays");
 const toggleCape = document.getElementById("toggle-cape");
 const toggleSlim = document.getElementById("toggle-slim");
 const animationSpeed = document.getElementById("animation-speed");
 const dockToggle = document.getElementById("dock-toggle");
+const compactViewport = window.matchMedia("(max-width: 760px), (pointer: coarse)");
+const STATUS_HIDE_DELAY_MS = 3200;
+let statusHideTimer = null;
 
-function setStatus(message) {
+function setStatus(message, options = {}) {
+  window.clearTimeout(statusHideTimer);
   status.textContent = message;
   status.title = message;
+  status.dataset.visible = message ? "true" : "false";
+
+  if (options.temporary) {
+    const visibleMessage = message;
+    statusHideTimer = window.setTimeout(() => {
+      if (status.textContent === visibleMessage) {
+        status.dataset.visible = "false";
+        status.removeAttribute("title");
+      }
+    }, STATUS_HIDE_DELAY_MS);
+  }
 }
 
 new MutationObserver(() => {
-  status.title = status.textContent || "";
+  const message = status.textContent || "";
+  status.title = message;
+  if (message) {
+    status.dataset.visible = "true";
+  }
 }).observe(status, { childList: true, characterData: true, subtree: true });
 
 function requestedPreset() {
@@ -62,9 +82,11 @@ async function loadPlayerSkin(viewer, player) {
   if (hasCape) {
     await loadPlayerCape(viewer, player);
     toggleCape.checked = true;
-    setStatus(`Loaded ${slim ? "slim" : "classic"} skin and cape for ${player}`);
+    setStatus(`Loaded ${slim ? "slim" : "classic"} skin and cape for ${player}`, {
+      temporary: true,
+    });
   } else {
-    setStatus(`Loaded ${slim ? "slim" : "classic"} skin for ${player}`);
+    setStatus(`Loaded ${slim ? "slim" : "classic"} skin for ${player}`, { temporary: true });
   }
 }
 
@@ -91,8 +113,12 @@ function syncAnimationControls(viewer) {
   animationSpeed.disabled = !toggleAnimation.checked;
 }
 
+function isCompactViewport() {
+  return compactViewport.matches;
+}
+
 function defaultDockOpen() {
-  return true;
+  return !isCompactViewport();
 }
 
 function setDockOpen(open) {
@@ -100,6 +126,33 @@ function setDockOpen(open) {
   dockToggle.setAttribute("aria-pressed", String(open));
   dockToggle.setAttribute("aria-label", open ? "Hide controls" : "Show controls");
   dockToggle.title = open ? "Hide controls" : "Show controls";
+}
+
+function collapseDockAfterPrimaryAction() {
+  if (isCompactViewport()) {
+    setDockOpen(false);
+  }
+}
+
+function syncViewportHeight() {
+  const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${height}px`);
+}
+
+function downloadPngDataUrl(dataUrl, filename) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function headPngFilename() {
+  const label = playerInput.value.trim() || "head";
+  const safeLabel = label.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 32) || "head";
+  return `skinhelm-${safeLabel}-180x180.png`;
 }
 
 async function loadRequestedPlayer(viewer, requestRender) {
@@ -110,6 +163,7 @@ async function loadRequestedPlayer(viewer, requestRender) {
 
   try {
     await loadPlayerSkin(viewer, player);
+    collapseDockAfterPrimaryAction();
     requestRender();
   } catch (error) {
     setStatus(String(error));
@@ -117,6 +171,7 @@ async function loadRequestedPlayer(viewer, requestRender) {
 }
 
 async function main() {
+  syncViewportHeight();
   await init();
   const viewer = SkinhelmViewer.init();
   viewer.resize();
@@ -185,9 +240,22 @@ async function main() {
   loadDefault.addEventListener("click", () => {
     try {
       viewer.load_default_skin();
+      setStatus("Loaded default skin", { temporary: true });
       requestRender();
     } catch (error) {
       setStatus(String(error));
+    }
+  });
+
+  saveHead.addEventListener("click", () => {
+    try {
+      const dataUrl = viewer.export_head_png_data_url();
+      downloadPngDataUrl(dataUrl, headPngFilename());
+      setStatus("Saved head PNG at 180x180", { temporary: true });
+      requestRender();
+    } catch (error) {
+      setStatus(String(error));
+      requestRender();
     }
   });
 
@@ -199,7 +267,11 @@ async function main() {
 
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      viewer.load_skin_bytes_with_model(bytes, toggleSlim.checked);
+      const message = viewer.load_skin_bytes(bytes);
+      const slim = message.toLowerCase().includes("(slim)");
+      toggleSlim.checked = slim;
+      setStatus(`Loaded ${slim ? "slim" : "classic"} skin from PNG`, { temporary: true });
+      collapseDockAfterPrimaryAction();
       requestRender();
     } catch (error) {
       setStatus(String(error));
@@ -218,6 +290,8 @@ async function main() {
       const bytes = new Uint8Array(await file.arrayBuffer());
       viewer.load_cape_bytes(bytes);
       toggleCape.checked = true;
+      setStatus("Loaded cape from PNG", { temporary: true });
+      collapseDockAfterPrimaryAction();
       requestRender();
     } catch (error) {
       setStatus(String(error));
@@ -247,28 +321,99 @@ async function main() {
     requestRender();
   });
 
-  canvas.addEventListener("mousedown", (event) => {
-    event.preventDefault();
+  const startPointer = (event) => {
     pointerActive = true;
     viewer.pointer_down(event.clientX, event.clientY);
     requestRender();
-  });
+  };
 
-  window.addEventListener("mousemove", (event) => {
+  const movePointer = (event) => {
     if (!pointerActive) {
       return;
     }
-    event.preventDefault();
     pendingPointerMove = { x: event.clientX, y: event.clientY };
     requestRender();
-  });
+  };
 
-  window.addEventListener("mouseup", () => {
+  const endPointer = () => {
     pointerActive = false;
     pendingPointerMove = null;
     viewer.pointer_up();
     requestRender();
-  });
+  };
+
+  if (window.PointerEvent) {
+    canvas.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (!event.isPrimary) {
+          return;
+        }
+        event.preventDefault();
+        canvas.setPointerCapture?.(event.pointerId);
+        startPointer(event);
+      },
+      { passive: false },
+    );
+
+    canvas.addEventListener(
+      "pointermove",
+      (event) => {
+        if (!event.isPrimary) {
+          return;
+        }
+        event.preventDefault();
+        movePointer(event);
+      },
+      { passive: false },
+    );
+
+    canvas.addEventListener("pointerup", endPointer);
+    canvas.addEventListener("pointercancel", endPointer);
+    canvas.addEventListener("lostpointercapture", endPointer);
+  } else {
+    canvas.addEventListener(
+      "touchstart",
+      (event) => {
+        if (event.touches.length !== 1) {
+          return;
+        }
+        event.preventDefault();
+        startPointer(event.touches[0]);
+      },
+      { passive: false },
+    );
+
+    canvas.addEventListener(
+      "touchmove",
+      (event) => {
+        if (event.touches.length !== 1) {
+          return;
+        }
+        event.preventDefault();
+        movePointer(event.touches[0]);
+      },
+      { passive: false },
+    );
+
+    canvas.addEventListener("touchend", endPointer);
+    canvas.addEventListener("touchcancel", endPointer);
+
+    canvas.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      startPointer(event);
+    });
+
+    window.addEventListener("mousemove", (event) => {
+      if (!pointerActive) {
+        return;
+      }
+      event.preventDefault();
+      movePointer(event);
+    });
+
+    window.addEventListener("mouseup", endPointer);
+  }
 
   canvas.addEventListener(
     "wheel",
@@ -280,14 +425,30 @@ async function main() {
     { passive: false },
   );
 
-  window.addEventListener("resize", () => {
+  const resizeViewer = () => {
+    syncViewportHeight();
     try {
       viewer.resize();
       requestRender();
     } catch (error) {
       setStatus(String(error));
     }
-  });
+  };
+
+  window.addEventListener("resize", resizeViewer);
+  window.visualViewport?.addEventListener("resize", resizeViewer);
+  window.visualViewport?.addEventListener("scroll", resizeViewer);
+
+  const handleViewportModeChange = () => {
+    setDockOpen(defaultDockOpen());
+    resizeViewer();
+  };
+
+  if (compactViewport.addEventListener) {
+    compactViewport.addEventListener("change", handleViewportModeChange);
+  } else {
+    compactViewport.addListener(handleViewportModeChange);
+  }
 
   requestRender();
 }

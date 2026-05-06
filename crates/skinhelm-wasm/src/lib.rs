@@ -33,11 +33,15 @@ impl SkinhelmViewer {
         })
     }
 
-    pub fn load_skin_bytes(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+    pub fn load_skin_bytes(&mut self, bytes: &[u8]) -> Result<String, JsValue> {
         self.app.load_skin_bytes(bytes)
     }
 
-    pub fn load_skin_bytes_with_model(&mut self, bytes: &[u8], slim: bool) -> Result<(), JsValue> {
+    pub fn load_skin_bytes_with_model(
+        &mut self,
+        bytes: &[u8],
+        slim: bool,
+    ) -> Result<String, JsValue> {
         self.app.load_skin_bytes_with_model(bytes, slim)
     }
 
@@ -84,6 +88,10 @@ impl SkinhelmViewer {
 
     pub fn render_frame(&mut self, timestamp_ms: f64) -> Result<(), JsValue> {
         self.app.render_frame(timestamp_ms)
+    }
+
+    pub fn export_head_png_data_url(&mut self) -> Result<String, JsValue> {
+        self.app.export_head_png_data_url()
     }
 
     pub fn pointer_down(&mut self, x: f32, y: f32) {

@@ -13,6 +13,7 @@ The project also includes a lightweight 2D helmeted-head PNG endpoint for integr
 - Supports classic and slim/Alex player models.
 - Renders outer layers such as hat, jacket, sleeves, and pants.
 - Supports local skin and cape PNG uploads in the viewer UI.
+- Exports the current skin head as a pixel-perfect `180x180` PNG.
 - Loads official skins and capes by Minecraft username or UUID when served by the backend.
 - Keeps pixel-art textures sharp with nearest-neighbor filtering.
 - Provides orbit, zoom, resize-aware rendering, and optional experimental walk animation.
@@ -111,9 +112,10 @@ Always available:
 
 `/helm/{player}` accepts a Minecraft username, a hyphenated UUID, or a compact UUID. It also accepts an optional `size` query parameter:
 
-- Default: `180`.
+- Default: `184`.
 - Minimum: `8`.
 - Maximum: `512`.
+- Non-multiple sizes are rounded to the nearest multiple of `8`, so each Minecraft head pixel renders as an equal square.
 
 Examples:
 
@@ -144,5 +146,4 @@ cargo clippy -p skinhelm-wasm --target wasm32-unknown-unknown -- -D warnings
 
 ## Known Limitations
 
-- PNG export is not supported.
 - Elytra rendering is not implemented.

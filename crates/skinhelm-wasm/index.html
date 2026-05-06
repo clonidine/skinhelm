@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>skinhelm-wasm</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Skinhelm</title>
     <style>
       :root {
         color-scheme: dark;
@@ -38,15 +38,20 @@
       body {
         margin: 0;
         min-height: 100vh;
+        min-height: -webkit-fill-available;
         overflow: hidden;
         background: var(--bg);
         color: var(--text-primary);
         line-height: 1.5;
+        overscroll-behavior: none;
+        -webkit-font-smoothing: antialiased;
+        -webkit-text-size-adjust: 100%;
       }
 
       button,
       input {
         font: inherit;
+        -webkit-tap-highlight-color: transparent;
       }
 
       :focus-visible {
@@ -57,7 +62,7 @@
       .app-shell {
         position: relative;
         min-height: 100dvh;
-        height: 100dvh;
+        height: var(--app-height, 100dvh);
         overflow: hidden;
         background: var(--bg);
       }
@@ -71,7 +76,11 @@
         align-items: center;
         gap: 16px;
         height: clamp(58px, 7vh, 76px);
-        padding: 0 clamp(16px, 3vw, 30px);
+        padding:
+          env(safe-area-inset-top, 0)
+          calc(clamp(16px, 3vw, 30px) + env(safe-area-inset-right, 0))
+          0
+          calc(clamp(16px, 3vw, 30px) + env(safe-area-inset-left, 0));
         background: linear-gradient(180deg, rgba(0, 0, 0, 0.82), transparent);
         pointer-events: none;
       }
@@ -150,7 +159,7 @@
       .viewer-stage {
         position: relative;
         min-height: 100dvh;
-        height: 100dvh;
+        height: var(--app-height, 100dvh);
         overflow: hidden;
       }
 
@@ -161,16 +170,50 @@
         min-height: 100dvh;
         background: #101216;
         touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      #status {
+        justify-self: end;
+        max-width: min(58vw, 520px);
+        padding: 8px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.36);
+        color: rgba(255, 255, 255, 0.76);
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        opacity: 1;
+        transform: translateY(0);
+        transition:
+          opacity var(--transition-fast),
+          transform var(--transition-fast);
+      }
+
+      #status[data-visible="false"] {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(-4px);
       }
 
       .control-dock {
         position: absolute;
         left: 50%;
-        bottom: clamp(18px, 4vh, 38px);
+        bottom: calc(clamp(18px, 4vh, 38px) + env(safe-area-inset-bottom, 0));
         z-index: 3;
         display: grid;
         gap: 12px;
-        width: min(980px, calc(100vw - 32px));
+        width: min(
+          980px,
+          calc(100vw - 32px - env(safe-area-inset-left, 0) - env(safe-area-inset-right, 0))
+        );
         transform: translateX(-50%);
       }
 
@@ -181,12 +224,12 @@
       .dock-toggle {
         position: absolute;
         right: clamp(16px, 3vw, 30px);
-        bottom: clamp(18px, 4vh, 38px);
+        bottom: calc(clamp(18px, 4vh, 38px) + env(safe-area-inset-bottom, 0));
         z-index: 4;
         display: grid;
         place-items: center;
-        width: 42px;
-        height: 42px;
+        width: 46px;
+        height: 46px;
         border: 1px solid rgba(255, 255, 255, 0.14);
         border-radius: 50%;
         background: rgba(255, 255, 255, 0.055);
@@ -195,6 +238,7 @@
           0 16px 44px rgba(0, 0, 0, 0.36);
         cursor: pointer;
         backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         transition:
           transform var(--transition-fast),
           border-color var(--transition-fast),
@@ -235,7 +279,7 @@
       }
 
       html[data-dock="open"] .dock-toggle {
-        bottom: calc(clamp(18px, 4vh, 38px) + 76px);
+        bottom: calc(clamp(18px, 4vh, 38px) + env(safe-area-inset-bottom, 0) + 76px);
       }
 
       .control-pill {
@@ -254,6 +298,7 @@
           inset 0 1px 0 rgba(255, 255, 255, 0.06),
           var(--shadow-panel);
         backdrop-filter: blur(22px);
+        -webkit-backdrop-filter: blur(22px);
       }
 
       .button,
@@ -284,6 +329,7 @@
         cursor: text;
         justify-content: flex-start;
         outline: none;
+        font-size: 16px;
       }
 
       .player-input::placeholder {
@@ -411,25 +457,92 @@
       }
 
       @media (max-width: 760px) {
+        .app-shell,
+        .viewer-stage,
+        #viewer-canvas {
+          min-height: 100svh;
+          height: var(--app-height, 100svh);
+        }
+
         .viewer-topbar {
-          grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+          grid-template-columns: minmax(0, 1fr);
           align-items: start;
+          gap: 10px;
           height: auto;
-          padding-top: 14px;
+          padding:
+            calc(12px + env(safe-area-inset-top, 0))
+            calc(14px + env(safe-area-inset-right, 0))
+            0
+            calc(14px + env(safe-area-inset-left, 0));
+        }
+
+        .brand-block {
+          min-width: 0;
+        }
+
+        .brand-mark {
+          width: 34px;
+          height: 34px;
+        }
+
+        .brand-copy strong {
+          font-size: 1rem;
         }
 
         .brand-copy span {
           display: none;
         }
 
+        #status {
+          justify-self: start;
+          max-width: calc(100vw - 28px - env(safe-area-inset-left, 0) - env(safe-area-inset-right, 0));
+          padding: 7px 10px;
+          border-radius: 12px;
+          font-size: 0.74rem;
+          white-space: normal;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+        }
+
+        .control-dock {
+          bottom: env(safe-area-inset-bottom, 0);
+          width: 100%;
+          max-height: min(56svh, 430px);
+          padding:
+            0
+            calc(10px + env(safe-area-inset-right, 0))
+            max(10px, env(safe-area-inset-bottom, 0))
+            calc(10px + env(safe-area-inset-left, 0));
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+
         .control-pill {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          align-items: stretch;
           justify-content: stretch;
-          border-radius: 28px;
-          padding: 14px;
+          gap: 8px;
+          border-radius: 24px;
+          padding: 12px;
+          background: rgba(12, 13, 17, 0.84);
         }
 
         html[data-dock="open"] .dock-toggle {
-          bottom: calc(clamp(18px, 4vh, 38px) + 430px);
+          bottom: calc(min(56svh, 430px) + max(14px, env(safe-area-inset-bottom, 0)));
+        }
+
+        html[data-dock="closed"] .dock-toggle {
+          bottom: calc(14px + env(safe-area-inset-bottom, 0));
+        }
+
+        .dock-toggle {
+          right: calc(12px + env(safe-area-inset-right, 0));
+          width: 48px;
+          height: 48px;
+          background: rgba(15, 16, 20, 0.78);
         }
 
         .button,
@@ -439,7 +552,52 @@
         .speed-field {
           width: 100%;
           justify-content: space-between;
-          border-radius: 18px;
+          min-height: 48px;
+          border-radius: 16px;
+          padding-right: 14px;
+          padding-left: 14px;
+        }
+
+        .player-input,
+        .button-primary,
+        .speed-field {
+          grid-column: 1 / -1;
+        }
+
+        .toggle-field,
+        .speed-field {
+          gap: 10px;
+          font-size: 0.78rem;
+        }
+
+        .toggle-copy,
+        .speed-field span {
+          min-width: 0;
+          overflow-wrap: anywhere;
+          white-space: normal;
+        }
+
+        .speed-field input[type="range"] {
+          width: min(48vw, 220px);
+        }
+
+        .button:hover,
+        .file-button:hover,
+        .button-primary:hover,
+        .dock-toggle:hover {
+          transform: none;
+        }
+      }
+
+      @media (max-width: 380px) {
+        .control-pill {
+          grid-template-columns: 1fr;
+        }
+
+        .player-input,
+        .button-primary,
+        .speed-field {
+          grid-column: auto;
         }
       }
     </style>
@@ -456,7 +614,7 @@
             <span>WebGL viewer</span>
           </div>
         </div>
-        <span id="status" hidden aria-hidden="true">Starting viewer...</span>
+        <span id="status" role="status" aria-live="polite">Starting viewer...</span>
       </header>
 
       <main class="viewer-stage">
@@ -476,6 +634,8 @@
               class="player-input"
               type="text"
               autocomplete="off"
+              autocapitalize="none"
+              enterkeyhint="go"
               spellcheck="false"
               placeholder="Username or UUID"
               aria-label="Minecraft username or UUID"
@@ -486,6 +646,7 @@
             <input id="cape-file" class="file-input" type="file" accept="image/png" />
             <label class="file-button" for="cape-file">Choose Cape</label>
             <button id="load-default" class="button" type="button">Default</button>
+            <button id="save-head" class="button" type="button">Save Head</button>
 
             <label class="toggle-field">
               <span class="toggle-copy">Outer layers</span>

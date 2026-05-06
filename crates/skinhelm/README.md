@@ -61,9 +61,10 @@ curl -o head-256.png "http://localhost:3000/helm/bc881e0292164f6ea80f7b9df0ccf9e
 
 The optional `size` query parameter controls the output PNG dimensions:
 
-- default: `180`;
+- default: `184`;
 - minimum: `8`;
 - maximum: `512`.
+- values between those bounds are rounded to the nearest multiple of `8` so the head is painted with equal Minecraft-style squares.
 
 Successful responses include:
 

@@ -20,7 +20,7 @@ Rendering uses the standard Minecraft skin coordinates:
 - Base face: `x = 8`, `y = 8`, `width = 8`, `height = 8`.
 - Helmet/hat overlay: `x = 40`, `y = 8`, `width = 8`, `height = 8`.
 
-Modern `64x64` skins get alpha compositing for the overlay layer when it contains visible pixels. Legacy `64x32` skins are rendered from the base face only. The final image is resized with nearest-neighbor filtering so the output remains pixel-sharp.
+Modern `64x64` skins get alpha compositing for the overlay layer when it contains visible pixels. Legacy `64x32` skins are rendered from the base face only. The final image is resized with nearest-neighbor filtering and normalized to a multiple of `8` so every Minecraft head pixel becomes an equal square.
 
 ## Public API and Main Types
 
@@ -38,13 +38,13 @@ Important items:
 
 - `PlayerInput`: enum with `Uuid(String)` and `Username(String)`.
 - `SkinProfile`: skin URL, `slim` model flag, and optional cape URL.
-- `DEFAULT_SIZE`: `180`.
+- `DEFAULT_SIZE`: `184`.
 - `MIN_SIZE`: `8`.
 - `MAX_SIZE`: `512`.
 - `parse_player(value)`: accepts a valid username, hyphenated UUID, or compact UUID.
 - `normalize_uuid(value)`: converts a valid UUID to compact lowercase form without hyphens.
 - `is_username_valid(value)`: validates Minecraft usernames from `3` to `16` ASCII alphanumeric characters or `_`.
-- `parse_size(value)`: validates the optional output size, using `DEFAULT_SIZE` when missing.
+- `parse_size(value)`: validates the optional output size, using `DEFAULT_SIZE` when missing and rounding provided sizes to the nearest multiple of `8`.
 
 ### `mojang::MojangClient`
 
@@ -66,7 +66,7 @@ The client calls:
 
 ### `render`
 
-`render_helm_png(skin_png, size)` receives skin PNG bytes and returns a square PNG at the requested size.
+`render_helm_png(skin_png, size)` receives skin PNG bytes and returns a square PNG at the nearest Minecraft-pixel-safe size.
 
 It validates that the image can be decoded and that it is large enough to contain the base face. Invalid image data returns `AppError::InvalidSkinImage`.
 

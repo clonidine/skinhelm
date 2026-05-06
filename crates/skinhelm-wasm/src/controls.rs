@@ -1,16 +1,17 @@
 use crate::math::{Mat4, Vec3};
-use crate::model::MeshDebugBounds;
+use crate::model::{skin_pixel_vec3_to_meters, skin_pixels_to_meters, MeshDebugBounds};
 
 pub const DEFAULT_PROFILE_FOV_DEGREES: f32 = 50.0;
 pub const DEFAULT_PROFILE_ZOOM: f32 = 0.70;
 pub const OVERLAY_ALPHA_DISCARD_THRESHOLD: f32 = 0.00001;
-pub const PROFILE_TARGET: Vec3 = Vec3::new(0.0, 15.5, 0.0);
-pub const PROFILE_FAR_PLANE: f32 = 360.0;
+pub const PROFILE_TARGET: Vec3 = skin_pixel_vec3_to_meters(Vec3::new(0.0, 15.5, 0.0));
+pub const PROFILE_FAR_PLANE: f32 = skin_pixels_to_meters(360.0);
 
 const DEFAULT_PROFILE_YAW_DEGREES: f32 = -15.0;
 const DEFAULT_PROFILE_PITCH_DEGREES: f32 = 6.0;
-const MIN_CAMERA_DISTANCE: f32 = 10.0;
-const MAX_CAMERA_DISTANCE: f32 = 256.0;
+const MIN_CAMERA_DISTANCE: f32 = skin_pixels_to_meters(18.0);
+const MAX_CAMERA_DISTANCE: f32 = skin_pixels_to_meters(96.0);
+const WHEEL_ZOOM_STEP_SKIN_PIXELS: f32 = 0.04;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewerPreset {
@@ -152,8 +153,9 @@ impl OrbitControls {
 
     #[inline]
     pub fn zoom(&mut self, delta_y: f32) {
+        let step = skin_pixels_to_meters(WHEEL_ZOOM_STEP_SKIN_PIXELS);
         self.distance =
-            (self.distance + delta_y * 0.04).clamp(MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE);
+            (self.distance + delta_y * step).clamp(MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE);
     }
 
     #[inline(always)]
@@ -212,7 +214,8 @@ pub fn profile_projection(preset: ViewerPreset, aspect: f32) -> Mat4 {
 #[inline]
 pub fn fit_camera_distance(fov_degrees: f32, zoom: f32) -> f32 {
     let safe_zoom = zoom.max(0.0001);
-    let distance = 4.5 + 16.5 / (fov_degrees.to_radians() * 0.5).tan() / safe_zoom;
+    let distance =
+        skin_pixels_to_meters(4.5 + 16.5 / (fov_degrees.to_radians() * 0.5).tan() / safe_zoom);
     distance.clamp(MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE)
 }
 
@@ -287,8 +290,8 @@ fn bounds_corners(bounds: MeshDebugBounds) -> [Vec3; 8] {
 #[cfg(any(debug_assertions, test))]
 pub fn debug_head_front_view_matrix() -> Mat4 {
     Mat4::look_at(
-        Vec3::new(0.0, 28.0, 64.0),
-        Vec3::new(0.0, 28.0, 0.0),
+        skin_pixel_vec3_to_meters(Vec3::new(0.0, 28.0, 64.0)),
+        skin_pixel_vec3_to_meters(Vec3::new(0.0, 28.0, 0.0)),
         Vec3::new(0.0, 1.0, 0.0),
     )
 }
@@ -311,7 +314,10 @@ mod tests {
         assert!((controls.yaw - (-15.0_f32).to_radians()).abs() < 0.0001);
         assert!((controls.pitch - 6.0_f32.to_radians()).abs() < 0.0001);
         assert!((controls.distance - fit_camera_distance(50.0, 0.70)).abs() < 0.0001);
-        assert_eq!(controls.target, Vec3::new(0.0, 15.5, 0.0));
+        assert_eq!(
+            controls.target,
+            skin_pixel_vec3_to_meters(Vec3::new(0.0, 15.5, 0.0))
+        );
     }
 
     #[test]
@@ -335,7 +341,10 @@ mod tests {
     fn default_camera_matches_chosen_values() {
         let camera = ViewerPreset::Default.camera();
 
-        assert_eq!(camera.target, Vec3::new(0.0, 15.5, 0.0));
+        assert_eq!(
+            camera.target,
+            skin_pixel_vec3_to_meters(Vec3::new(0.0, 15.5, 0.0))
+        );
         assert!((camera.yaw_degrees - -15.0).abs() < 0.0001);
         assert!((camera.pitch_degrees - 6.0).abs() < 0.0001);
         assert!((camera.fov_degrees - 50.0).abs() < 0.0001);
@@ -345,7 +354,8 @@ mod tests {
     #[test]
     fn camera_fit_distance_matches_default_formula() {
         let distance = fit_camera_distance(50.0, 0.70);
-        let expected = 4.5 + 16.5 / (50.0_f32.to_radians() * 0.5).tan() / 0.70;
+        let expected =
+            skin_pixels_to_meters(4.5 + 16.5 / (50.0_f32.to_radians() * 0.5).tan() / 0.70);
 
         assert!((distance - expected).abs() < 0.0001);
     }
@@ -360,8 +370,14 @@ mod tests {
     fn default_fit_keeps_full_model_visible() {
         let controls = OrbitControls::new();
         let view_projection = default_profile_projection(1.0).multiply(controls.view_matrix());
-        let feet = ndc_y(view_projection, Vec3::new(0.0, 0.0, 0.0));
-        let headwear_top = ndc_y(view_projection, Vec3::new(0.0, 32.5, 0.0));
+        let feet = ndc_y(
+            view_projection,
+            skin_pixel_vec3_to_meters(Vec3::new(0.0, 0.0, 0.0)),
+        );
+        let headwear_top = ndc_y(
+            view_projection,
+            skin_pixel_vec3_to_meters(Vec3::new(0.0, 32.5, 0.0)),
+        );
         let canvas_coverage = (headwear_top - feet) * 0.5;
 
         assert!((-1.0..=1.0).contains(&feet));
@@ -408,8 +424,8 @@ mod tests {
         let view = debug_head_front_view_matrix();
 
         assert!((view.m[12] - 0.0).abs() < 0.0001);
-        assert!((view.m[13] - -28.0).abs() < 0.0001);
-        assert!((view.m[14] - -64.0).abs() < 0.0001);
+        assert!((view.m[13] - -skin_pixels_to_meters(28.0)).abs() < 0.0001);
+        assert!((view.m[14] - -skin_pixels_to_meters(64.0)).abs() < 0.0001);
     }
 
     #[test]
@@ -418,8 +434,8 @@ mod tests {
             debug_head_front_view_matrix_for_preset(ViewerPreset::from_query_value("legacy"));
 
         assert!((view.m[12] - 0.0).abs() < 0.0001);
-        assert!((view.m[13] - -28.0).abs() < 0.0001);
-        assert!((view.m[14] - -64.0).abs() < 0.0001);
+        assert!((view.m[13] - -skin_pixels_to_meters(28.0)).abs() < 0.0001);
+        assert!((view.m[14] - -skin_pixels_to_meters(64.0)).abs() < 0.0001);
     }
 
     #[test]
@@ -429,6 +445,17 @@ mod tests {
         controls.zoom(10_000.0);
 
         assert!((controls.distance - MAX_CAMERA_DISTANCE).abs() < 0.0001);
+    }
+
+    #[test]
+    fn wheel_zoom_step_uses_meter_scaled_skin_pixels() {
+        let mut controls = OrbitControls::new();
+        let start = controls.distance;
+
+        controls.zoom(100.0);
+
+        let expected = start + skin_pixels_to_meters(4.0);
+        assert!((controls.distance - expected).abs() < 0.0001);
     }
 
     fn ndc_y(matrix: Mat4, point: Vec3) -> f32 {

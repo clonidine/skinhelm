@@ -2,7 +2,8 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 
-pub const DEFAULT_SIZE: u32 = 180;
+pub const HEAD_PIXEL_GRID: u32 = 8;
+pub const DEFAULT_SIZE: u32 = 184;
 pub const MIN_SIZE: u32 = 8;
 pub const MAX_SIZE: u32 = 512;
 
@@ -110,13 +111,18 @@ pub fn parse_size(value: Option<&str>) -> Result<u32, AppError> {
         None => Ok(DEFAULT_SIZE),
         Some(raw) => {
             let size = raw.parse::<u32>().map_err(|_| AppError::InvalidSize)?;
-            if (MIN_SIZE..=MAX_SIZE).contains(&size) {
-                Ok(size)
-            } else {
-                Err(AppError::InvalidSize)
-            }
+            normalize_size(size)
         }
     }
+}
+
+pub fn normalize_size(size: u32) -> Result<u32, AppError> {
+    if !(MIN_SIZE..=MAX_SIZE).contains(&size) {
+        return Err(AppError::InvalidSize);
+    }
+
+    let rounded = ((size + (HEAD_PIXEL_GRID / 2)) / HEAD_PIXEL_GRID) * HEAD_PIXEL_GRID;
+    Ok(rounded.clamp(MIN_SIZE, MAX_SIZE))
 }
 
 fn is_hex_byte(byte: u8) -> bool {
@@ -168,8 +174,15 @@ mod tests {
     }
 
     #[test]
-    fn defaults_missing_size_to_180() {
-        assert_eq!(parse_size(None).expect("default size"), 180);
+    fn defaults_missing_size_to_even_minecraft_pixels() {
+        assert_eq!(parse_size(None).expect("default size"), 184);
+    }
+
+    #[test]
+    fn rounds_size_to_nearest_minecraft_pixel_multiple() {
+        assert_eq!(parse_size(Some("180")).expect("valid size"), 184);
+        assert_eq!(parse_size(Some("179")).expect("valid size"), 176);
+        assert_eq!(parse_size(Some("511")).expect("valid size"), 512);
     }
 
     #[test]

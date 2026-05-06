@@ -12,8 +12,10 @@ Main capabilities:
 - Direct WebGL2 rendering through `web-sys`, without an external 3D engine.
 - Generated default skin so the viewer can start without a local file.
 - Local upload of modern `64x64` and legacy `64x32` skin PNGs.
+- Export of the current skin head as a pixel-perfect `180x180` PNG.
 - Classic 4 px arms and slim/Alex 3 px arms.
 - Minecraft cuboid rendering for head, body, arms, and legs.
+- WebGL geometry uses `0.5m / 8px = 0.0625m` per skin pixel, so the whole model is drawn in meter-scaled Minecraft pixels.
 - Optional outer layers: hat, jacket, sleeves, and pants.
 - Local upload of `64x32` capes or compatible `64x64` cape PNGs.
 - Skin, model type, and official cape loading by username or UUID when served by the `skinhelm` backend.
@@ -98,6 +100,7 @@ Important exported methods:
 - `set_preset(preset)`: applies the camera preset; currently unknown values resolve to `default`.
 - `resize()`: synchronizes canvas pixel size with CSS size and `devicePixelRatio`.
 - `render_frame(timestamp_ms)`: renders one frame and advances animation time.
+- `export_head_png_data_url()`: exports the current skin head to a pixel-perfect `180x180` PNG data URL.
 - `pointer_down(x, y)`, `pointer_move(x, y)`, `pointer_up()`: orbit controls.
 - `wheel(delta_y)`: zoom control.
 
@@ -172,6 +175,7 @@ The interface in `index.html` uses these IDs, consumed by `bootstrap.js`:
 - `player-input`: accepts a Minecraft username, hyphenated UUID, or compact UUID.
 - `load-player`: loads the player from `player-input` through the backend viewer routes.
 - `load-default`: loads the generated default skin.
+- `save-head`: downloads the current skin head as a pixel-perfect `180x180` PNG.
 - `toggle-overlays`: shows or hides outer layers.
 - `toggle-cape`: shows or hides an already loaded cape.
 - `toggle-slim`: uses slim arms for local PNG files.
@@ -206,7 +210,7 @@ Capes:
 - `webgl.rs` compiles GLSL ES 3.00 shaders at runtime and uses WebGL2 only.
 - The renderer uploads textures as raw RGBA decoded by the `image` crate.
 - `UNPACK_FLIP_Y_WEBGL` is not used; UV coordinates follow Minecraft image pixels with the origin at the top-left.
-- Each UV rectangle is inset by half a texel to reduce visual bleeding between adjacent skin regions.
+- UV rectangles span the full Minecraft skin pixel region so each cuboid face preserves the expected 8x8, 8x12, or 4x12 pixel grid.
 - Outer layers use a very low alpha discard threshold and are drawn with `BLEND`, `POLYGON_OFFSET_FILL`, and `depth_mask(false)`.
 - The cape uses a separate texture from the skin and writes to the depth buffer before overlays.
 - Walking animation is intentionally simple: arms and legs swing with sine waves, the body has a subtle bob, and the cape receives a reactive correction when visible.
@@ -216,7 +220,6 @@ Capes:
 ## Known Limitations
 
 - No elytra rendering.
-- No PNG snapshot export.
 - No direct Mojang API calls in this crate; official username/UUID loading depends on the `skinhelm` backend.
 - The UI does not yet expose full idle, running, or sneaking poses.
 - Local capes outside the classic layout are not supported.

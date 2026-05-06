@@ -1,8 +1,11 @@
 use crate::animation::WalkPose;
 use crate::math::{Mat4, Vec3};
-use crate::skin::{ModelVariant, SkinFormat};
+use crate::skin::{ModelVariant, SkinFormat, SkinImage};
 
 pub const VERTEX_STRIDE: usize = 8;
+pub const HEAD_OBJECT_METERS: f32 = 0.5;
+pub const HEAD_SKIN_PIXELS: f32 = 8.0;
+pub const SKIN_PIXEL_METERS: f32 = HEAD_OBJECT_METERS / HEAD_SKIN_PIXELS;
 
 const BODY_OVERLAY_SIZE: Vec3 = Vec3::new(
     8.0 + OUTER_LAYER_DILATION * 2.0,
@@ -21,6 +24,12 @@ const LEG_OVERLAY_SIZE: Vec3 = Vec3::new(
 );
 const HAT_LAYER_DILATION: f32 = 0.5;
 const OUTER_LAYER_DILATION: f32 = 0.25;
+const UV_EDGE_INSET_TEXELS: f32 = 0.001;
+const OVERLAY_ALPHA_TEST_THRESHOLD: u8 = 128;
+const OVERLAY_FACE_MIN_VISIBLE_RATIO: f32 = 0.45;
+const MIN_HEAD_OVERLAY_PIXELS: usize = 64;
+const MIN_BODY_OVERLAY_PIXELS: usize = 64;
+const MIN_LIMB_OVERLAY_PIXELS: usize = 48;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct UvRect {
@@ -38,11 +47,13 @@ impl UvRect {
 
     #[inline]
     pub fn normalized(self, skin_width: f32, skin_height: f32) -> NormalizedUv {
+        let x_inset = UV_EDGE_INSET_TEXELS.min(self.w * 0.5);
+        let y_inset = UV_EDGE_INSET_TEXELS.min(self.h * 0.5);
         NormalizedUv {
-            left: (self.x + 0.5) / skin_width,
-            right: (self.x + self.w - 0.5) / skin_width,
-            top: (self.y + 0.5) / skin_height,
-            bottom: (self.y + self.h - 0.5) / skin_height,
+            left: (self.x + x_inset) / skin_width,
+            right: (self.x + self.w - x_inset) / skin_width,
+            top: (self.y + y_inset) / skin_height,
+            bottom: (self.y + self.h - y_inset) / skin_height,
         }
     }
 }
@@ -239,6 +250,20 @@ struct FaceUvs {
     back: UvRect,
 }
 
+impl FaceUvs {
+    #[inline]
+    fn rects(self) -> [UvRect; 6] {
+        [
+            self.top,
+            self.bottom,
+            self.right,
+            self.front,
+            self.left,
+            self.back,
+        ]
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct PartSpec {
     part: BodyPart,
@@ -291,6 +316,45 @@ pub fn build_player_meshes_for_style(
         .into_iter()
         .map(|spec| build_mesh(spec, 64.0, skin_height))
         .collect()
+}
+
+pub fn overlay_part_has_visible_pixels(skin: &SkinImage, part: BodyPart) -> bool {
+    if !matches!(
+        part,
+        BodyPart::Head
+            | BodyPart::Body
+            | BodyPart::RightArm
+            | BodyPart::LeftArm
+            | BodyPart::RightLeg
+            | BodyPart::LeftLeg
+    ) {
+        return false;
+    }
+
+    if matches!(skin.format, SkinFormat::Legacy64x32) && part != BodyPart::Head {
+        return false;
+    }
+
+    let visible_pixels = skinview3d_uvs(skin.format, skin.model, part, true)
+        .rects()
+        .into_iter()
+        .map(|rect| uv_rect_visible_pixel_count(skin, rect))
+        .sum::<usize>();
+
+    visible_pixels >= overlay_visible_pixel_minimum(part)
+}
+
+pub fn prune_sparse_overlay_faces(meshes: &mut [Mesh], skin: &SkinImage) {
+    for mesh in meshes.iter_mut().filter(|mesh| mesh.overlay) {
+        let mut vertices = Vec::with_capacity(mesh.vertices.len());
+        for face in mesh.vertices.chunks_exact(6 * VERTEX_STRIDE) {
+            if overlay_face_has_enough_visible_pixels(face, skin) {
+                vertices.extend_from_slice(face);
+            }
+        }
+        mesh.vertex_count = (vertices.len() / VERTEX_STRIDE) as i32;
+        mesh.vertices = vertices;
+    }
 }
 
 pub fn skinview3d_hierarchy(variant: ModelVariant) -> Skinview3dHierarchy {
@@ -461,7 +525,7 @@ pub fn part_model_matrix(part: BodyPart, pivot: Vec3, pose: WalkPose) -> Mat4 {
         BodyPart::RightLeg | BodyPart::LeftLeg => 0.0,
     };
 
-    Mat4::translation(0.0, bob, 0.0)
+    Mat4::translation(0.0, skin_pixels_to_meters(bob), 0.0)
         .multiply(Mat4::translation(pivot.x, pivot.y, pivot.z))
         .multiply(Mat4::rotation_x(angle))
         .multiply(Mat4::translation(-pivot.x, -pivot.y, -pivot.z))
@@ -492,25 +556,20 @@ pub fn build_cape_mesh(cape_width: f32, cape_height: f32) -> Mesh {
 }
 
 fn build_mesh(spec: PartSpec, skin_width: f32, skin_height: f32) -> Mesh {
+    let center = skin_pixel_vec3_to_meters(spec.center);
+    let size = skin_pixel_vec3_to_meters(spec.size);
+    let pivot = skin_pixel_vec3_to_meters(spec.pivot);
     let mut vertices = Vec::with_capacity(36 * VERTEX_STRIDE);
     let half = Vec3::new(
-        spec.size.x * spec.inflate * 0.5,
-        spec.size.y * spec.inflate * 0.5,
-        spec.size.z * spec.inflate * 0.5,
+        size.x * spec.inflate * 0.5,
+        size.y * spec.inflate * 0.5,
+        size.z * spec.inflate * 0.5,
     );
-    let min = Vec3::new(
-        spec.center.x - half.x,
-        spec.center.y - half.y,
-        spec.center.z - half.z,
-    );
-    let max = Vec3::new(
-        spec.center.x + half.x,
-        spec.center.y + half.y,
-        spec.center.z + half.z,
-    );
+    let min = Vec3::new(center.x - half.x, center.y - half.y, center.z - half.z);
+    let max = Vec3::new(center.x + half.x, center.y + half.y, center.z + half.z);
 
     if !spec.hidden_top {
-        push_face(
+        push_face_reversed(
             &mut vertices,
             [
                 Vec3::new(min.x, max.y, max.z),
@@ -522,7 +581,7 @@ fn build_mesh(spec: PartSpec, skin_width: f32, skin_height: f32) -> Mesh {
             Vec3::new(0.0, 1.0, 0.0),
         );
     }
-    push_face(
+    push_face_reversed(
         &mut vertices,
         [
             Vec3::new(min.x, min.y, min.z),
@@ -533,7 +592,7 @@ fn build_mesh(spec: PartSpec, skin_width: f32, skin_height: f32) -> Mesh {
         spec.uvs.bottom.normalized(skin_width, skin_height),
         Vec3::new(0.0, -1.0, 0.0),
     );
-    push_face(
+    push_face_reversed(
         &mut vertices,
         [
             Vec3::new(min.x, min.y, min.z),
@@ -555,7 +614,7 @@ fn build_mesh(spec: PartSpec, skin_width: f32, skin_height: f32) -> Mesh {
         spec.uvs.front.normalized(skin_width, skin_height),
         Vec3::new(0.0, 0.0, 1.0),
     );
-    push_face(
+    push_face_reversed(
         &mut vertices,
         [
             Vec3::new(max.x, min.y, max.z),
@@ -583,19 +642,121 @@ fn build_mesh(spec: PartSpec, skin_width: f32, skin_height: f32) -> Mesh {
         vertices,
         part: spec.part,
         overlay: spec.overlay,
-        pivot: spec.pivot,
+        pivot,
     }
+}
+
+fn uv_rect_visible_pixel_count(skin: &SkinImage, rect: UvRect) -> usize {
+    let min_x = rect.x.max(0.0).floor() as u32;
+    let min_y = rect.y.max(0.0).floor() as u32;
+    let max_x = (rect.x + rect.w).ceil().max(0.0).min(skin.width as f32) as u32;
+    let max_y = (rect.y + rect.h).ceil().max(0.0).min(skin.height as f32) as u32;
+
+    (min_y..max_y)
+        .map(|y| {
+            (min_x..max_x)
+                .filter(|x| {
+                    let offset = ((y * skin.width + x) * 4 + 3) as usize;
+                    skin.rgba.get(offset).copied().unwrap_or(0) >= OVERLAY_ALPHA_TEST_THRESHOLD
+                })
+                .count()
+        })
+        .sum()
+}
+
+fn overlay_face_has_enough_visible_pixels(face: &[f32], skin: &SkinImage) -> bool {
+    let rect = face_uv_rect(face, skin);
+    let area = (rect.w * rect.h).max(1.0);
+    let required = (area * OVERLAY_FACE_MIN_VISIBLE_RATIO).ceil() as usize;
+    uv_rect_visible_pixel_count(skin, rect) >= required
+}
+
+fn face_uv_rect(face: &[f32], skin: &SkinImage) -> UvRect {
+    let (min_u, max_u, min_v, max_v) = face.chunks_exact(VERTEX_STRIDE).fold(
+        (f32::MAX, f32::MIN, f32::MAX, f32::MIN),
+        |(min_u, max_u, min_v, max_v), vertex| {
+            (
+                min_u.min(vertex[3]),
+                max_u.max(vertex[3]),
+                min_v.min(vertex[4]),
+                max_v.max(vertex[4]),
+            )
+        },
+    );
+
+    let x = (min_u * skin.width as f32 - UV_EDGE_INSET_TEXELS).floor();
+    let y = (min_v * skin.height as f32 - UV_EDGE_INSET_TEXELS).floor();
+    let max_x = (max_u * skin.width as f32 + UV_EDGE_INSET_TEXELS).ceil();
+    let max_y = (max_v * skin.height as f32 + UV_EDGE_INSET_TEXELS).ceil();
+
+    UvRect::new(
+        x.max(0.0),
+        y.max(0.0),
+        (max_x - x).max(0.0),
+        (max_y - y).max(0.0),
+    )
+}
+
+fn overlay_visible_pixel_minimum(part: BodyPart) -> usize {
+    match part {
+        BodyPart::Head => MIN_HEAD_OVERLAY_PIXELS,
+        BodyPart::Body => MIN_BODY_OVERLAY_PIXELS,
+        BodyPart::RightArm | BodyPart::LeftArm | BodyPart::RightLeg | BodyPart::LeftLeg => {
+            MIN_LIMB_OVERLAY_PIXELS
+        }
+        BodyPart::Cape => usize::MAX,
+    }
+}
+
+#[inline(always)]
+pub const fn skin_pixels_to_meters(value: f32) -> f32 {
+    value * SKIN_PIXEL_METERS
+}
+
+#[inline(always)]
+pub const fn skin_pixel_vec3_to_meters(value: Vec3) -> Vec3 {
+    Vec3::new(
+        skin_pixels_to_meters(value.x),
+        skin_pixels_to_meters(value.y),
+        skin_pixels_to_meters(value.z),
+    )
 }
 
 #[inline]
 fn push_face(vertices: &mut Vec<f32>, positions: [Vec3; 4], uv: NormalizedUv, normal: Vec3) {
+    push_face_with_winding(vertices, positions, uv, normal, false);
+}
+
+#[inline]
+fn push_face_reversed(
+    vertices: &mut Vec<f32>,
+    positions: [Vec3; 4],
+    uv: NormalizedUv,
+    normal: Vec3,
+) {
+    push_face_with_winding(vertices, positions, uv, normal, true);
+}
+
+#[inline]
+fn push_face_with_winding(
+    vertices: &mut Vec<f32>,
+    positions: [Vec3; 4],
+    uv: NormalizedUv,
+    normal: Vec3,
+    reversed: bool,
+) {
     let uvs = [
         [uv.left, uv.bottom],
         [uv.left, uv.top],
         [uv.right, uv.top],
         [uv.right, uv.bottom],
     ];
-    for index in [0_usize, 1, 2, 0, 2, 3] {
+    let indices = if reversed {
+        [0_usize, 2, 1, 0, 3, 2]
+    } else {
+        [0_usize, 1, 2, 0, 2, 3]
+    };
+    for index in indices {
         let position = positions[index];
         vertices.extend_from_slice(&[
             position.x,
@@ -996,10 +1157,20 @@ mod tests {
     #[test]
     fn converts_pixel_uv_to_normalized_webgl_uv() {
         let uv = UvRect::new(8.0, 8.0, 8.0, 8.0).normalized(64.0, 64.0);
-        assert!((uv.left - 0.1328125).abs() < 0.0001);
-        assert!((uv.right - 0.2421875).abs() < 0.0001);
-        assert!((uv.top - 0.1328125).abs() < 0.0001);
-        assert!((uv.bottom - 0.2421875).abs() < 0.0001);
+        assert!((uv.left - ((8.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((uv.right - ((16.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((uv.top - ((8.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((uv.bottom - ((16.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn uv_inset_avoids_neighbor_bleed_without_shrinking_to_texel_centers() {
+        let uv = UvRect::new(8.0, 8.0, 8.0, 8.0).normalized(64.0, 64.0);
+
+        assert!(uv.left > 8.0 / 64.0);
+        assert!(uv.right < 16.0 / 64.0);
+        assert!(uv.left < 8.01 / 64.0);
+        assert!(uv.right > 15.99 / 64.0);
     }
 
     #[test]
@@ -1010,13 +1181,42 @@ mod tests {
     }
 
     #[test]
+    fn cuboid_faces_are_front_facing_for_webgl_backface_culling() {
+        let meshes = build_player_meshes_for_style(
+            SkinFormat::Modern64x64,
+            ModelVariant::Classic,
+            PlayerModelStyle::Skinview3d1To1,
+        );
+
+        for mesh in meshes {
+            for face in mesh.vertices.chunks_exact(6 * VERTEX_STRIDE) {
+                let a = vertex_position(&face[0..VERTEX_STRIDE]);
+                let b = vertex_position(&face[VERTEX_STRIDE..VERTEX_STRIDE * 2]);
+                let c = vertex_position(&face[VERTEX_STRIDE * 2..VERTEX_STRIDE * 3]);
+                let winding_normal = cross(sub(b, a), sub(c, a));
+                let stored_normal = vertex_normal(&face[0..VERTEX_STRIDE]);
+                let dot = winding_normal.x * stored_normal.x
+                    + winding_normal.y * stored_normal.y
+                    + winding_normal.z * stored_normal.z;
+
+                assert!(
+                    dot > 0.0,
+                    "mesh {:?} overlay={} has reversed face winding",
+                    mesh.part,
+                    mesh.overlay
+                );
+            }
+        }
+    }
+
+    #[test]
     fn base_head_mesh_is_exactly_eight_by_eight_by_eight() {
         let bounds = debug_head_bounds();
 
-        assert_vec3_close(bounds.size, Vec3::new(8.0, 8.0, 8.0));
-        assert_vec3_close(bounds.center, Vec3::new(0.0, 28.0, 0.0));
-        assert_vec3_close(bounds.min, Vec3::new(-4.0, 24.0, -4.0));
-        assert_vec3_close(bounds.max, Vec3::new(4.0, 32.0, 4.0));
+        assert_skin_pixel_vec3_close(bounds.size, Vec3::new(8.0, 8.0, 8.0));
+        assert_skin_pixel_vec3_close(bounds.center, Vec3::new(0.0, 28.0, 0.0));
+        assert_skin_pixel_vec3_close(bounds.min, Vec3::new(-4.0, 24.0, -4.0));
+        assert_skin_pixel_vec3_close(bounds.max, Vec3::new(4.0, 32.0, 4.0));
     }
 
     #[test]
@@ -1024,10 +1224,10 @@ mod tests {
         assert_eq!(head_uv().front, UvRect::new(8.0, 8.0, 8.0, 8.0));
 
         let normalized = head_uv().front.normalized(64.0, 64.0);
-        assert!((normalized.left - (8.5 / 64.0)).abs() < 0.0001);
-        assert!((normalized.right - (15.5 / 64.0)).abs() < 0.0001);
-        assert!((normalized.top - (8.5 / 64.0)).abs() < 0.0001);
-        assert!((normalized.bottom - (15.5 / 64.0)).abs() < 0.0001);
+        assert!((normalized.left - ((8.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((normalized.right - ((16.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((normalized.top - ((8.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((normalized.bottom - ((16.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
     }
 
     #[test]
@@ -1046,8 +1246,8 @@ mod tests {
                 (min_y.min(y), max_y.max(y))
             });
 
-        assert!((min_y - 24.0).abs() < 0.0001);
-        assert!((max_y - 32.0).abs() < 0.0001);
+        assert!((min_y - skin_pixels_to_meters(24.0)).abs() < 0.0001);
+        assert!((max_y - skin_pixels_to_meters(32.0)).abs() < 0.0001);
     }
 
     #[test]
@@ -1065,8 +1265,8 @@ mod tests {
         let u = cape.vertices[back_face_first_vertex + 3];
         let v = cape.vertices[back_face_first_vertex + 4];
 
-        assert!((u - (1.5 / 64.0)).abs() < 0.0001);
-        assert!((v - (16.5 / 32.0)).abs() < 0.0001);
+        assert!((u - ((1.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((v - ((17.0 - UV_EDGE_INSET_TEXELS) / 32.0)).abs() < 0.0001);
     }
 
     #[test]
@@ -1074,9 +1274,9 @@ mod tests {
         let cape = build_cape_mesh(64.0, 32.0);
         let bounds = mesh_debug_bounds(&cape);
 
-        assert!((bounds.max.z - -2.26).abs() < 0.0001);
-        assert!(bounds.max.z < -2.25);
-        assert_vec3_close(cape.pivot, Vec3::new(0.0, 24.0, -2.25));
+        assert!((bounds.max.z - skin_pixels_to_meters(-2.26)).abs() < 0.0001);
+        assert!(bounds.max.z < skin_pixels_to_meters(-2.25));
+        assert_skin_pixel_vec3_close(cape.pivot, Vec3::new(0.0, 24.0, -2.25));
     }
 
     #[test]
@@ -1093,7 +1293,7 @@ mod tests {
         let (min_x, max_x) = xs.fold((f32::MAX, f32::MIN), |(min_x, max_x), x| {
             (min_x.min(x), max_x.max(x))
         });
-        assert!(((max_x - min_x) - 3.0).abs() < 0.0001);
+        assert!(((max_x - min_x) - skin_pixels_to_meters(3.0)).abs() < 0.0001);
     }
 
     #[test]
@@ -1105,10 +1305,10 @@ mod tests {
         let classic_left_arm = mesh(&classic, BodyPart::LeftArm, false);
         let slim_left_arm = mesh(&slim, BodyPart::LeftArm, false);
 
-        assert_vec3_close(dimensions(classic_right_arm), Vec3::new(4.0, 12.0, 4.0));
-        assert_vec3_close(dimensions(classic_left_arm), Vec3::new(4.0, 12.0, 4.0));
-        assert_vec3_close(dimensions(slim_right_arm), Vec3::new(3.0, 12.0, 4.0));
-        assert_vec3_close(dimensions(slim_left_arm), Vec3::new(3.0, 12.0, 4.0));
+        assert_skin_pixel_vec3_close(dimensions(classic_right_arm), Vec3::new(4.0, 12.0, 4.0));
+        assert_skin_pixel_vec3_close(dimensions(classic_left_arm), Vec3::new(4.0, 12.0, 4.0));
+        assert_skin_pixel_vec3_close(dimensions(slim_right_arm), Vec3::new(3.0, 12.0, 4.0));
+        assert_skin_pixel_vec3_close(dimensions(slim_left_arm), Vec3::new(3.0, 12.0, 4.0));
     }
 
     #[test]
@@ -1124,11 +1324,11 @@ mod tests {
             dimensions(mesh(&classic, BodyPart::Head, true)),
             dimensions(mesh(&slim, BodyPart::Head, true)),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             dimensions(mesh(&slim, BodyPart::Head, false)),
             Vec3::new(8.0, 8.0, 8.0),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             dimensions(mesh(&slim, BodyPart::Head, true)),
             Vec3::new(9.0, 9.0, 9.0),
         );
@@ -1138,20 +1338,20 @@ mod tests {
     fn player_bounds_include_all_classic_overlays() {
         let bounds = player_debug_bounds(SkinFormat::Modern64x64, ModelVariant::Classic);
 
-        assert_vec3_close(bounds.min, Vec3::new(-8.25, -0.25, -4.5));
-        assert_vec3_close(bounds.max, Vec3::new(8.25, 32.5, 4.5));
-        assert_vec3_close(bounds.size, Vec3::new(16.5, 32.75, 9.0));
-        assert_vec3_close(bounds.center, Vec3::new(0.0, 16.125, 0.0));
+        assert_skin_pixel_vec3_close(bounds.min, Vec3::new(-8.25, -0.25, -4.5));
+        assert_skin_pixel_vec3_close(bounds.max, Vec3::new(8.25, 32.5, 4.5));
+        assert_skin_pixel_vec3_close(bounds.size, Vec3::new(16.5, 32.75, 9.0));
+        assert_skin_pixel_vec3_close(bounds.center, Vec3::new(0.0, 16.125, 0.0));
     }
 
     #[test]
     fn player_bounds_include_all_slim_overlays() {
         let bounds = player_debug_bounds(SkinFormat::Modern64x64, ModelVariant::Slim);
 
-        assert_vec3_close(bounds.min, Vec3::new(-7.25, -0.25, -4.5));
-        assert_vec3_close(bounds.max, Vec3::new(7.25, 32.5, 4.5));
-        assert_vec3_close(bounds.size, Vec3::new(14.5, 32.75, 9.0));
-        assert_vec3_close(bounds.center, Vec3::new(0.0, 16.125, 0.0));
+        assert_skin_pixel_vec3_close(bounds.min, Vec3::new(-7.25, -0.25, -4.5));
+        assert_skin_pixel_vec3_close(bounds.max, Vec3::new(7.25, 32.5, 4.5));
+        assert_skin_pixel_vec3_close(bounds.size, Vec3::new(14.5, 32.75, 9.0));
+        assert_skin_pixel_vec3_close(bounds.center, Vec3::new(0.0, 16.125, 0.0));
     }
 
     #[test]
@@ -1182,12 +1382,15 @@ mod tests {
             .find(|mesh| mesh.part == BodyPart::Head && mesh.overlay)
             .expect("headwear mesh exists");
 
-        assert_vec3_close(dimensions(head), Vec3::new(8.0, 8.0, 8.0));
-        assert_vec3_close(dimensions(headwear), Vec3::new(9.0, 9.0, 9.0));
-        assert_vec3_close(center(head), Vec3::new(0.0, 28.0, 0.0));
-        assert_vec3_close(center(headwear), Vec3::new(0.0, 28.0, 0.0));
+        assert_skin_pixel_vec3_close(dimensions(head), Vec3::new(8.0, 8.0, 8.0));
+        assert_skin_pixel_vec3_close(dimensions(headwear), Vec3::new(9.0, 9.0, 9.0));
+        assert_skin_pixel_vec3_close(center(head), Vec3::new(0.0, 28.0, 0.0));
+        assert_skin_pixel_vec3_close(center(headwear), Vec3::new(0.0, 28.0, 0.0));
         assert_eq!(head.pivot, headwear.pivot);
-        assert_eq!(head.pivot, Vec3::new(0.0, 24.0, 0.0));
+        assert_eq!(
+            head.pivot,
+            skin_pixel_vec3_to_meters(Vec3::new(0.0, 24.0, 0.0))
+        );
     }
 
     #[test]
@@ -1206,9 +1409,9 @@ mod tests {
             .find(|mesh| mesh.part == BodyPart::RightLeg && mesh.overlay)
             .expect("right pants mesh exists");
 
-        assert_vec3_close(dimensions(body), Vec3::new(8.5, 12.5, 4.5));
-        assert_vec3_close(dimensions(right_arm), Vec3::new(4.5, 12.5, 4.5));
-        assert_vec3_close(dimensions(right_leg), Vec3::new(4.5, 12.5, 4.5));
+        assert_skin_pixel_vec3_close(dimensions(body), Vec3::new(8.5, 12.5, 4.5));
+        assert_skin_pixel_vec3_close(dimensions(right_arm), Vec3::new(4.5, 12.5, 4.5));
+        assert_skin_pixel_vec3_close(dimensions(right_leg), Vec3::new(4.5, 12.5, 4.5));
     }
 
     #[test]
@@ -1219,7 +1422,7 @@ mod tests {
             .find(|mesh| mesh.part == BodyPart::RightArm && mesh.overlay)
             .expect("right sleeve mesh exists");
 
-        assert_vec3_close(dimensions(right_arm), Vec3::new(3.5, 12.5, 4.5));
+        assert_skin_pixel_vec3_close(dimensions(right_arm), Vec3::new(3.5, 12.5, 4.5));
     }
 
     #[test]
@@ -1231,10 +1434,72 @@ mod tests {
             .expect("headwear mesh exists");
         let (min_u, max_u, min_v, max_v) = uv_bounds(headwear);
 
-        assert!((min_u - (32.5 / 64.0)).abs() < 0.0001);
-        assert!((max_u - (63.5 / 64.0)).abs() < 0.0001);
-        assert!((min_v - (0.5 / 64.0)).abs() < 0.0001);
-        assert!((max_v - (15.5 / 64.0)).abs() < 0.0001);
+        assert!((min_u - ((32.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((max_u - ((64.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((min_v - ((0.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((max_v - ((16.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn legacy_64x32_only_builds_head_overlay_layer() {
+        let meshes = build_player_meshes(SkinFormat::Legacy64x32, ModelVariant::Classic);
+        let overlay_parts = meshes
+            .iter()
+            .filter(|mesh| mesh.overlay)
+            .map(|mesh| mesh.part)
+            .collect::<Vec<_>>();
+
+        assert_eq!(overlay_parts, vec![BodyPart::Head]);
+    }
+
+    #[test]
+    fn transparent_legacy_hat_layer_is_not_visible() {
+        let skin = transparent_skin(64, 32, SkinFormat::Legacy64x32);
+
+        assert!(!overlay_part_has_visible_pixels(&skin, BodyPart::Head));
+        assert!(!overlay_part_has_visible_pixels(&skin, BodyPart::Body));
+    }
+
+    #[test]
+    fn visible_overlay_pixels_enable_only_their_part() {
+        let mut skin = transparent_skin(64, 64, SkinFormat::Modern64x64);
+        fill_alpha(&mut skin, 40, 8, 8, 8, 255);
+        fill_alpha(&mut skin, 20, 36, 8, 8, 255);
+
+        assert!(overlay_part_has_visible_pixels(&skin, BodyPart::Head));
+        assert!(overlay_part_has_visible_pixels(&skin, BodyPart::Body));
+        assert!(!overlay_part_has_visible_pixels(&skin, BodyPart::RightArm));
+    }
+
+    #[test]
+    fn sparse_overlay_pixels_do_not_enable_whole_part() {
+        let mut skin = transparent_skin(64, 64, SkinFormat::Modern64x64);
+        fill_alpha(&mut skin, 20, 38, 8, 4, 255);
+        fill_alpha(&mut skin, 20, 44, 8, 1, 255);
+
+        assert!(!overlay_part_has_visible_pixels(&skin, BodyPart::Body));
+    }
+
+    #[test]
+    fn sparse_headwear_faces_are_pruned_without_removing_dense_faces() {
+        let mut skin = transparent_skin(64, 64, SkinFormat::Modern64x64);
+        fill_alpha(&mut skin, 40, 8, 8, 4, 255);
+        fill_alpha(&mut skin, 42, 12, 2, 1, 255);
+        fill_alpha(&mut skin, 49, 0, 1, 1, 255);
+        fill_alpha(&mut skin, 54, 0, 1, 1, 255);
+        fill_alpha(&mut skin, 49, 7, 1, 1, 255);
+        fill_alpha(&mut skin, 54, 7, 1, 1, 255);
+
+        let mut meshes = build_player_meshes(SkinFormat::Modern64x64, ModelVariant::Classic);
+        prune_sparse_overlay_faces(&mut meshes, &skin);
+        let headwear = mesh(&meshes, BodyPart::Head, true);
+
+        assert_eq!(headwear.vertex_count, 6);
+        let (min_u, max_u, min_v, max_v) = uv_bounds(headwear);
+        assert!((min_u - ((40.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((max_u - ((48.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((min_v - ((8.0 + UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
+        assert!((max_v - ((16.0 - UV_EDGE_INSET_TEXELS) / 64.0)).abs() < 0.0001);
     }
 
     #[test]
@@ -1257,12 +1522,18 @@ mod tests {
             .find(|mesh| mesh.part == BodyPart::LeftLeg && mesh.overlay)
             .expect("left pants mesh exists");
 
-        assert_vec3_close(center(right_base), Vec3::new(-1.9, 6.0, 0.0));
-        assert_vec3_close(center(left_base), Vec3::new(1.9, 6.0, 0.0));
-        assert_vec3_close(center(right_overlay), Vec3::new(-1.9, 6.0, 0.0));
-        assert_vec3_close(center(left_overlay), Vec3::new(1.9, 6.0, 0.0));
-        assert_eq!(right_base.pivot, Vec3::new(-1.9, 12.0, 0.0));
-        assert_eq!(left_base.pivot, Vec3::new(1.9, 12.0, 0.0));
+        assert_skin_pixel_vec3_close(center(right_base), Vec3::new(-1.9, 6.0, 0.0));
+        assert_skin_pixel_vec3_close(center(left_base), Vec3::new(1.9, 6.0, 0.0));
+        assert_skin_pixel_vec3_close(center(right_overlay), Vec3::new(-1.9, 6.0, 0.0));
+        assert_skin_pixel_vec3_close(center(left_overlay), Vec3::new(1.9, 6.0, 0.0));
+        assert_eq!(
+            right_base.pivot,
+            skin_pixel_vec3_to_meters(Vec3::new(-1.9, 12.0, 0.0))
+        );
+        assert_eq!(
+            left_base.pivot,
+            skin_pixel_vec3_to_meters(Vec3::new(1.9, 12.0, 0.0))
+        );
     }
 
     #[test]
@@ -1285,12 +1556,18 @@ mod tests {
             .find(|mesh| mesh.part == BodyPart::LeftArm && mesh.overlay)
             .expect("left sleeve mesh exists");
 
-        assert_vec3_close(center(right_base), Vec3::new(-6.0, 18.0, 0.0));
-        assert_vec3_close(center(left_base), Vec3::new(6.0, 18.0, 0.0));
-        assert_vec3_close(center(right_overlay), Vec3::new(-6.0, 18.0, 0.0));
-        assert_vec3_close(center(left_overlay), Vec3::new(6.0, 18.0, 0.0));
-        assert_eq!(right_base.pivot, Vec3::new(-5.0, 22.0, 0.0));
-        assert_eq!(left_base.pivot, Vec3::new(5.0, 22.0, 0.0));
+        assert_skin_pixel_vec3_close(center(right_base), Vec3::new(-6.0, 18.0, 0.0));
+        assert_skin_pixel_vec3_close(center(left_base), Vec3::new(6.0, 18.0, 0.0));
+        assert_skin_pixel_vec3_close(center(right_overlay), Vec3::new(-6.0, 18.0, 0.0));
+        assert_skin_pixel_vec3_close(center(left_overlay), Vec3::new(6.0, 18.0, 0.0));
+        assert_eq!(
+            right_base.pivot,
+            skin_pixel_vec3_to_meters(Vec3::new(-5.0, 22.0, 0.0))
+        );
+        assert_eq!(
+            left_base.pivot,
+            skin_pixel_vec3_to_meters(Vec3::new(5.0, 22.0, 0.0))
+        );
     }
 
     #[test]
@@ -1379,9 +1656,9 @@ mod tests {
             PlayerModelStyle::Skinview3d1To1,
         );
 
-        assert_vec3_close(bounds.min, Vec3::new(-8.25, -10.25, -4.5));
-        assert_vec3_close(bounds.max, Vec3::new(8.25, 16.5, 4.5));
-        assert_vec3_close(bounds.size, Vec3::new(16.5, 26.75, 9.0));
+        assert_skin_pixel_vec3_close(bounds.min, Vec3::new(-8.25, -10.25, -4.5));
+        assert_skin_pixel_vec3_close(bounds.max, Vec3::new(8.25, 16.5, 4.5));
+        assert_skin_pixel_vec3_close(bounds.size, Vec3::new(16.5, 26.75, 9.0));
     }
 
     #[test]
@@ -1392,19 +1669,19 @@ mod tests {
             PlayerModelStyle::Skinview3d1To1,
         );
 
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             part_bounds(&parts, BodyPart::Head, false).center,
             Vec3::new(0.0, 12.0, 0.0),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             part_bounds(&parts, BodyPart::Body, false).center,
             Vec3::new(0.0, 2.0, 0.0),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             part_bounds(&parts, BodyPart::RightLeg, false).center,
             Vec3::new(-1.9, -4.0, -0.1),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             part_bounds(&parts, BodyPart::LeftLeg, false).center,
             Vec3::new(1.9, -4.0, -0.1),
         );
@@ -1452,23 +1729,23 @@ mod tests {
             PlayerModelStyle::Skinview3d1To1,
         );
 
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             vertical_range(part_bounds(&parts, BodyPart::Head, false)),
             Vec3::new(0.0, 8.0, 16.0),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             vertical_range(part_bounds(&parts, BodyPart::Head, true)),
             Vec3::new(0.0, 7.5, 16.5),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             vertical_range(part_bounds(&parts, BodyPart::Body, false)),
             Vec3::new(0.0, -4.0, 8.0),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             vertical_range(part_bounds(&parts, BodyPart::RightLeg, false)),
             Vec3::new(0.0, -10.0, 2.0),
         );
-        assert_vec3_close(
+        assert_skin_pixel_vec3_close(
             vertical_range(part_bounds(&parts, BodyPart::LeftLeg, false)),
             Vec3::new(0.0, -10.0, 2.0),
         );
@@ -1525,10 +1802,57 @@ mod tests {
         )
     }
 
+    fn vertex_position(vertex: &[f32]) -> Vec3 {
+        Vec3::new(vertex[0], vertex[1], vertex[2])
+    }
+
+    fn vertex_normal(vertex: &[f32]) -> Vec3 {
+        Vec3::new(vertex[5], vertex[6], vertex[7])
+    }
+
+    fn sub(a: Vec3, b: Vec3) -> Vec3 {
+        Vec3::new(a.x - b.x, a.y - b.y, a.z - b.z)
+    }
+
+    fn cross(a: Vec3, b: Vec3) -> Vec3 {
+        Vec3::new(
+            a.y * b.z - a.z * b.y,
+            a.z * b.x - a.x * b.z,
+            a.x * b.y - a.y * b.x,
+        )
+    }
+
     fn assert_vec3_close(actual: Vec3, expected: Vec3) {
         assert!((actual.x - expected.x).abs() < 0.0001);
         assert!((actual.y - expected.y).abs() < 0.0001);
         assert!((actual.z - expected.z).abs() < 0.0001);
+    }
+
+    fn assert_skin_pixel_vec3_close(actual: Vec3, expected_skin_pixels: Vec3) {
+        assert_vec3_close(actual, skin_pixel_vec3_to_meters(expected_skin_pixels));
+    }
+
+    fn transparent_skin(width: u32, height: u32, format: SkinFormat) -> SkinImage {
+        SkinImage {
+            width,
+            height,
+            format,
+            model: ModelVariant::Classic,
+            rgba: vec![0; (width * height * 4) as usize],
+        }
+    }
+
+    fn set_alpha(skin: &mut SkinImage, x: u32, y: u32, alpha: u8) {
+        let offset = ((y * skin.width + x) * 4 + 3) as usize;
+        skin.rgba[offset] = alpha;
+    }
+
+    fn fill_alpha(skin: &mut SkinImage, x: u32, y: u32, width: u32, height: u32, alpha: u8) {
+        for py in y..y + height {
+            for px in x..x + width {
+                set_alpha(skin, px, py, alpha);
+            }
+        }
     }
 
     fn mesh(meshes: &[Mesh], part: BodyPart, overlay: bool) -> &Mesh {

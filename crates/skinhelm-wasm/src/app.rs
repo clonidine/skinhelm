@@ -11,8 +11,12 @@ use crate::error::ViewerError;
 use crate::math::Mat4;
 #[cfg(debug_assertions)]
 use crate::model::{BodyPart, MeshPartDebugBounds};
-use crate::skin::{decode_cape_png, decode_png, default_skin, ModelVariant};
+use crate::skin::{
+    decode_cape_png, decode_png, default_skin, render_head_png_data_url, ModelVariant, SkinImage,
+};
 use crate::webgl::Renderer;
+
+const HEAD_EXPORT_SIZE: u32 = 180;
 
 #[cfg(debug_assertions)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +41,7 @@ pub struct ViewerApp {
     elapsed_seconds: f32,
     last_timestamp_ms: Option<f64>,
     cape: CapeRenderState,
+    current_skin: Option<SkinImage>,
     #[cfg(debug_assertions)]
     debug_mode: DebugMode,
     viewer_preset: ViewerPreset,
@@ -73,6 +78,7 @@ impl ViewerApp {
             elapsed_seconds: 0.0,
             last_timestamp_ms: None,
             cape: CapeRenderState::new(),
+            current_skin: None,
             #[cfg(debug_assertions)]
             debug_mode: DebugMode::None,
             viewer_preset: ViewerPreset::Default,
@@ -81,22 +87,37 @@ impl ViewerApp {
         Ok(app)
     }
 
-    pub fn load_skin_bytes(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
-        self.load_skin_bytes_with_model(bytes, false)
+    pub fn load_skin_bytes(&mut self, bytes: &[u8]) -> Result<String, JsValue> {
+        self.load_skin_bytes_inner(bytes, None)
     }
 
-    pub fn load_skin_bytes_with_model(&mut self, bytes: &[u8], slim: bool) -> Result<(), JsValue> {
+    pub fn load_skin_bytes_with_model(
+        &mut self,
+        bytes: &[u8],
+        slim: bool,
+    ) -> Result<String, JsValue> {
+        self.load_skin_bytes_inner(bytes, Some(model_variant(slim)))
+    }
+
+    fn load_skin_bytes_inner(
+        &mut self,
+        bytes: &[u8],
+        model_override: Option<ModelVariant>,
+    ) -> Result<String, JsValue> {
         match decode_png(bytes).and_then(|skin| {
             let mut skin = skin;
-            skin.model = model_variant(slim);
-            let model = if slim { "slim" } else { "classic" };
+            if let Some(model) = model_override {
+                skin.model = model;
+            }
+            let model = model_label(skin.model);
             let message = format!("Loaded skin: {}x{} ({model})", skin.width, skin.height);
             self.renderer.upload_skin(&skin)?;
-            Ok(message)
+            Ok((message, skin))
         }) {
-            Ok(message) => {
+            Ok((message, skin)) => {
+                self.current_skin = Some(skin);
                 self.set_status_with_preset(&message);
-                Ok(())
+                Ok(message)
             }
             Err(error) => {
                 let message = error.message();
@@ -109,6 +130,7 @@ impl ViewerApp {
     pub fn load_default_skin(&mut self) -> Result<(), JsValue> {
         let skin = default_skin();
         self.renderer.upload_skin(&skin).map_err(to_js_error)?;
+        self.current_skin = Some(skin);
         self.set_status_with_preset("Loaded default generated skin");
         Ok(())
     }
@@ -339,6 +361,14 @@ impl ViewerApp {
         result
     }
 
+    pub fn export_head_png_data_url(&mut self) -> Result<String, JsValue> {
+        let skin = self
+            .current_skin
+            .as_ref()
+            .ok_or_else(|| js_error("no skin loaded"))?;
+        render_head_png_data_url(skin, self.overlays_enabled, HEAD_EXPORT_SIZE).map_err(to_js_error)
+    }
+
     #[inline]
     fn debug_active(&self) -> bool {
         #[cfg(debug_assertions)]
@@ -512,6 +542,13 @@ fn model_variant(slim: bool) -> ModelVariant {
         ModelVariant::Slim
     } else {
         ModelVariant::Classic
+    }
+}
+
+fn model_label(model: ModelVariant) -> &'static str {
+    match model {
+        ModelVariant::Classic => "classic",
+        ModelVariant::Slim => "slim",
     }
 }
 

@@ -15,6 +15,7 @@ pub enum ViewerError {
     InvalidCapePng,
     UnsupportedSkinDimensions(u32, u32),
     UnsupportedCapeDimensions(u32, u32),
+    PngEncode,
     WebGlOperation(&'static str),
 }
 
@@ -40,6 +41,7 @@ impl ViewerError {
             Self::UnsupportedCapeDimensions(width, height) => {
                 format!("unsupported cape size: {width}x{height}")
             }
+            Self::PngEncode => "failed to encode PNG".to_owned(),
             Self::WebGlOperation(operation) => format!("WebGL operation failed: {operation}"),
         }
     }

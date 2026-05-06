@@ -3,6 +3,7 @@ use image::imageops::FilterType;
 use image::{ColorType, GenericImageView, ImageEncoder, Rgba, RgbaImage};
 
 use crate::error::AppError;
+use crate::types::normalize_size;
 
 const HEAD_X: u32 = 8;
 const HEAD_Y: u32 = 8;
@@ -11,6 +12,7 @@ const OVERLAY_Y: u32 = 8;
 const HEAD_SIZE: u32 = 8;
 
 pub fn render_helm_png(skin_png: &[u8], size: u32) -> Result<Vec<u8>, AppError> {
+    let size = normalize_size(size)?;
     let skin = image::load_from_memory(skin_png).map_err(|err| {
         tracing::warn!(error = %err, "failed to decode skin png");
         AppError::InvalidSkinImage
@@ -186,6 +188,31 @@ mod tests {
         assert_eq!(*output.get_pixel(0, 0), Rgba([255, 0, 0, 255]));
         assert_eq!(*output.get_pixel(7, 0), Rgba([255, 0, 0, 255]));
         assert_eq!(*output.get_pixel(8, 0), Rgba([0, 255, 0, 255]));
+    }
+
+    #[test]
+    fn normalizes_render_size_to_equal_minecraft_squares() {
+        let mut skin = ImageBuffer::from_pixel(64, 64, Rgba([0, 0, 0, 0]));
+        for y in HEAD_Y..HEAD_Y + HEAD_SIZE {
+            for x in HEAD_X..HEAD_X + HEAD_SIZE {
+                let color = if x == HEAD_X {
+                    Rgba([255, 0, 0, 255])
+                } else {
+                    Rgba([0, 255, 0, 255])
+                };
+                skin.put_pixel(x, y, color);
+            }
+        }
+
+        let rendered = render_helm_png(&encode_test_png(&skin), 180).expect("renders helm");
+        let output = image::load_from_memory(&rendered)
+            .expect("output decodes")
+            .to_rgba8();
+
+        assert_eq!(output.dimensions(), (184, 184));
+        assert_eq!(184 % HEAD_SIZE, 0);
+        assert_eq!(*output.get_pixel(22, 0), Rgba([255, 0, 0, 255]));
+        assert_eq!(*output.get_pixel(23, 0), Rgba([0, 255, 0, 255]));
     }
 
     #[test]
